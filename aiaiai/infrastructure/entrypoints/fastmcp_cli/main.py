@@ -2,7 +2,7 @@ from fastmcp import FastMCP
 
 from aiaiai.application import roll_dice as roll_dice_use_case
 
-mcp = FastMCP(name="Dice Roller")
+mcp = FastMCP(name="Relaxdiego's Tools")
 
 
 @mcp.tool

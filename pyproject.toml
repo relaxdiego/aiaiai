@@ -8,6 +8,10 @@ dependencies = [
     "fastmcp>=3.0.0rc1",
 ]
 
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
 [tool.ruff.lint]
 # Turn on import sorting (isort compatible)
 extend-select = ["I"]
