@@ -1,6 +1,6 @@
-import random
-
 from fastmcp import FastMCP
+
+from aiaiai.application import roll_dice as roll_dice_use_case
 
 mcp = FastMCP(name="Dice Roller")
 
@@ -8,7 +8,7 @@ mcp = FastMCP(name="Dice Roller")
 @mcp.tool
 def roll_dice(n_dice: int) -> list[int]:
     """Roll `n_dice` 6-sided dice and return the results."""
-    return [random.randint(1, 6) for _ in range(n_dice)]
+    return roll_dice_use_case.roll_dice(n_dice)
 
 
 if __name__ == "__main__":
