@@ -1,0 +1,14 @@
+{
+  "mcpServers": {
+    "aiaiai": {
+      "type": "stdio",
+      "command": "uv",
+      "args": [
+        "run",
+        "fastmcp",
+        "run",
+        "aiaiai/infrastructure/entrypoints/fastmcp_cli/main.py"
+      ]
+    }
+  }
+}

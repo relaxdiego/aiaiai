@@ -1,0 +1,8 @@
+{
+  "$schema": "https://gofastmcp.com/public/schemas/fastmcp.json/v1.json",
+  "source": {
+    "type": "filesystem",
+    "path": "aiaiai/infrastructure/entrypoints/fastmcp_cli/main.py",
+    "entrypoint": "mcp"
+  }
+}
