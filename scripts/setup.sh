@@ -99,11 +99,21 @@ fi
 
 if [[ "$MACHINE_MODE" == "full" ]]; then
   print_header "Upstream provider keys (written to .envrc.local only — never committed)"
-  ask_secret "Anthropic API key"
+  printf '  Press Enter to skip any provider you are not using.\n'
+
+  printf '\n'
+  ask_secret "Anthropic API key (optional, Enter to skip)"
   ANTHROPIC_API_KEY="$REPLY"
-  if [[ -z "$ANTHROPIC_API_KEY" ]]; then
-    print_err "Anthropic API key is required in full mode."
-    exit 1
+
+  printf '\n'
+  printf '  AWS Bedrock (press Enter on both to skip)\n'
+  ask_secret "AWS Bearer Token (optional, Enter to skip)"
+  AWS_BEARER_TOKEN_BEDROCK="$REPLY"
+  ask "AWS Region" "us-east-1"
+  AWS_REGION="$REPLY"
+
+  if [[ -z "$ANTHROPIC_API_KEY" && -z "$AWS_BEARER_TOKEN_BEDROCK" ]]; then
+    print_warn "No provider credentials entered — models won't be callable until you add them to .envrc.local."
   fi
 fi
 
@@ -125,7 +135,11 @@ if [[ "$SKIP_ENVRC" -eq 0 ]]; then
     printf 'export GATEWAY_BASE_URL=%s\n' "$GATEWAY_BASE_URL"
     printf 'export LITELLM_MASTER_KEY=%s\n' "$LITELLM_MASTER_KEY"
     if [[ "$MACHINE_MODE" == "full" ]]; then
-      printf 'export ANTHROPIC_API_KEY=%s\n' "$ANTHROPIC_API_KEY"
+      [[ -n "$ANTHROPIC_API_KEY" ]] && printf 'export ANTHROPIC_API_KEY=%s\n' "$ANTHROPIC_API_KEY"
+      if [[ -n "$AWS_BEARER_TOKEN_BEDROCK" ]]; then
+        printf 'export AWS_BEARER_TOKEN_BEDROCK=%s\n' "$AWS_BEARER_TOKEN_BEDROCK"
+        printf 'export AWS_REGION=%s\n' "$AWS_REGION"
+      fi
     fi
   } > "$ENVRC_LOCAL"
   print_info "Wrote $ENVRC_LOCAL"
