@@ -1,7 +1,12 @@
-.PHONY: setup serve show-key
+.PHONY: setup serve show-key show-base-url
 
 setup:
 	@bash scripts/setup.sh
+
+show-base-url:
+	@ip=$$(ipconfig getifaddr $$(route -n get default 2>/dev/null | awk '/interface:/{print $$2}') 2>/dev/null) \
+	  && echo "http://$$ip:4000" \
+	  || { echo "Error: could not determine LAN IP."; exit 1; }
 
 show-key:
 	@if [ ! -f .envrc.local ]; then \
