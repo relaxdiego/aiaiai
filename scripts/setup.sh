@@ -191,9 +191,42 @@ print_header "Configuring Claude Code"
 CLAUDE_SETTINGS="$HOME/.claude/settings.json"
 mkdir -p "$(dirname "$CLAUDE_SETTINGS")"
 
+# Build the model list from litellm/config.yaml
+LITELLM_MODELS=()
+while IFS= read -r model; do
+  LITELLM_MODELS+=("$model")
+done < <(grep -E '^\s+model_name:' "$REPO_ROOT/litellm/config.yaml" | sed 's/.*model_name:[[:space:]]*//')
+
+# Read the current default model from settings.json (if any)
+EXISTING_MODEL=$(python3 -c "
+import json, os
+try:
+    s = json.load(open(os.path.expanduser('~/.claude/settings.json')))
+    print(s.get('model', ''))
+except:
+    print('')
+" 2>/dev/null)
+
+# Default to the existing model if it's still a valid gateway model, else first in list
+DEFAULT_MODEL="${LITELLM_MODELS[0]:-}"
+for m in "${LITELLM_MODELS[@]}"; do
+  [[ "$m" == "$EXISTING_MODEL" ]] && DEFAULT_MODEL="$m" && break
+done
+
+if [[ ${#LITELLM_MODELS[@]} -gt 0 ]]; then
+  printf '  Available models:\n'
+  for m in "${LITELLM_MODELS[@]}"; do printf '    - %s\n' "$m"; done
+  ask "Default model" "$DEFAULT_MODEL"
+  SELECTED_MODEL="$REPLY"
+else
+  print_warn "No models found in litellm/config.yaml; skipping default model selection."
+  SELECTED_MODEL=""
+fi
+
 if CLAUDE_SETTINGS="$CLAUDE_SETTINGS" \
    ANTHROPIC_BASE_URL="$GATEWAY_BASE_URL" \
    ANTHROPIC_AUTH_TOKEN="$LITELLM_MASTER_KEY" \
+   SELECTED_MODEL="$SELECTED_MODEL" \
    python3 - <<'PY'
 import json, os, sys
 
@@ -229,12 +262,17 @@ stale_keys = [
 for key in stale_keys:
     env.pop(key, None)
 
+selected = os.environ.get("SELECTED_MODEL", "")
+if selected:
+    settings["model"] = selected
+
 with open(path, "w") as f:
     json.dump(settings, f, indent=2)
     f.write("\n")
 PY
 then
   print_info "Set ANTHROPIC_BASE_URL, ANTHROPIC_AUTH_TOKEN, and CLAUDE_CODE_ENABLE_GATEWAY_MODEL_DISCOVERY in $CLAUDE_SETTINGS"
+  [[ -n "$SELECTED_MODEL" ]] && print_info "Default model: $SELECTED_MODEL"
   print_info "Claude Code now reaches the gateway from any directory."
 else
   print_warn "Could not update $CLAUDE_SETTINGS automatically (existing file is not valid JSON)."
