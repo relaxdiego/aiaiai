@@ -1,27 +1,25 @@
 model_list:
   # AWS Bedrock — latest opus, sonnet, haiku, Kimi (us. cross-region profiles)
+  # Auth: LiteLLM reads the bearer token from the AWS_BEARER_TOKEN_BEDROCK
+  # env var automatically; it is not a valid litellm_param.
   - model_name: claude-opus-4-8
     litellm_params:
       model: bedrock/us.anthropic.claude-opus-4-8
-      aws_bearer_token: os.environ/AWS_BEARER_TOKEN_BEDROCK
       aws_region_name: os.environ/AWS_REGION
 
   - model_name: claude-sonnet-4-6
     litellm_params:
       model: bedrock/us.anthropic.claude-sonnet-4-6
-      aws_bearer_token: os.environ/AWS_BEARER_TOKEN_BEDROCK
       aws_region_name: os.environ/AWS_REGION
 
   - model_name: claude-haiku-4-5-20251001
     litellm_params:
       model: bedrock/us.anthropic.claude-haiku-4-5-20251001-v1:0
-      aws_bearer_token: os.environ/AWS_BEARER_TOKEN_BEDROCK
       aws_region_name: os.environ/AWS_REGION
 
   - model_name: kimi-k2.5
     litellm_params:
       model: bedrock/moonshotai.kimi-k2.5
-      aws_bearer_token: os.environ/AWS_BEARER_TOKEN_BEDROCK
       aws_region_name: os.environ/AWS_REGION
 
 general_settings:
