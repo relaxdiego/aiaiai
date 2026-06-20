@@ -24,3 +24,12 @@ search:
   formats:
     - html
     - json                   # LiteLLM's searxng backend requires the JSON API
+
+# Disable engines that serve CAPTCHAs to unauthenticated self-hosted instances
+# (Google/Startpage rate-limit by IP and suspend for 1h, spamming the logs).
+# Result quality is unaffected — DuckDuckGo, Wikipedia, etc. still answer.
+engines:
+  - name: google
+    disabled: true
+  - name: startpage
+    disabled: true
