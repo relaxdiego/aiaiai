@@ -25,6 +25,31 @@ ask_secret() {
   printf '\n'
 }
 
+# Show first 6 chars of a secret followed by "..." for verification
+mask_value() {
+  local val="$1" n=6
+  if [[ ${#val} -lt $n ]]; then n=${#val}; fi
+  printf '%s...' "${val:0:$n}"
+}
+
+# Like ask_secret but shows a masked hint and keeps existing value on Enter
+ask_secret_with_default() {
+  local prompt="$1" existing="$2"
+  local hint=""
+  if [[ -n "$existing" ]]; then hint=" [$(mask_value "$existing"), Enter to keep]"; fi
+  printf '  %s%s: ' "$prompt" "$hint"
+  read -rs REPLY
+  printf '\n'
+  if [[ -z "$REPLY" && -n "$existing" ]]; then REPLY="$existing"; fi
+}
+
+# Read a variable's value from .envrc.local (strips quotes)
+read_envrc_var() {
+  local var="$1"
+  [[ -f "$REPO_ROOT/.envrc.local" ]] || return 0
+  grep -E "^export ${var}=" "$REPO_ROOT/.envrc.local" | cut -d= -f2- | tr -d "'\"" || true
+}
+
 confirm() {
   printf '  %s [y/N]: ' "$1"
   read -r REPLY
@@ -66,10 +91,7 @@ if [[ "$MACHINE_MODE" == "full" ]]; then
   GATEWAY_BASE_URL="http://127.0.0.1:4000"
   print_info "Gateway URL: $GATEWAY_BASE_URL (fixed for full mode)"
 
-  EXISTING_KEY=""
-  if [[ -f "$REPO_ROOT/.envrc.local" ]]; then
-    EXISTING_KEY="$(grep -E '^export LITELLM_MASTER_KEY=' "$REPO_ROOT/.envrc.local" | cut -d= -f2- | tr -d "'\""|| true)"
-  fi
+  EXISTING_KEY="$(read_envrc_var LITELLM_MASTER_KEY)"
 
   if [[ -n "$EXISTING_KEY" ]]; then
     LITELLM_MASTER_KEY="$EXISTING_KEY"
@@ -100,18 +122,23 @@ fi
 DATABASE_URL=""
 
 if [[ "$MACHINE_MODE" == "full" ]]; then
+  EXISTING_ANTHROPIC_API_KEY="$(read_envrc_var ANTHROPIC_API_KEY)"
+  EXISTING_AWS_BEARER_TOKEN="$(read_envrc_var AWS_BEARER_TOKEN_BEDROCK)"
+  EXISTING_AWS_REGION="$(read_envrc_var AWS_REGION)"
+  EXISTING_DATABASE_URL="$(read_envrc_var DATABASE_URL)"
+
   print_header "Upstream provider keys (written to .envrc.local only — never committed)"
   printf '  Press Enter to skip any provider you are not using.\n'
 
   printf '\n'
-  ask_secret "Anthropic API key (optional, Enter to skip)"
+  ask_secret_with_default "Anthropic API key (optional, Enter to skip)" "$EXISTING_ANTHROPIC_API_KEY"
   ANTHROPIC_API_KEY="$REPLY"
 
   printf '\n'
   printf '  AWS Bedrock (press Enter on both to skip)\n'
-  ask_secret "AWS Bearer Token (optional, Enter to skip)"
+  ask_secret_with_default "AWS Bearer Token (optional, Enter to skip)" "$EXISTING_AWS_BEARER_TOKEN"
   AWS_BEARER_TOKEN_BEDROCK="$REPLY"
-  ask "AWS Region" "us-east-1"
+  ask "AWS Region" "${EXISTING_AWS_REGION:-us-east-1}"
   AWS_REGION="$REPLY"
 
   if [[ -z "$ANTHROPIC_API_KEY" && -z "$AWS_BEARER_TOKEN_BEDROCK" ]]; then
@@ -119,7 +146,7 @@ if [[ "$MACHINE_MODE" == "full" ]]; then
   fi
 
   printf '\n'
-  ask "PostgreSQL database URL (optional, Enter to skip)" ""
+  ask_secret_with_default "PostgreSQL database URL (optional, Enter to skip)" "$EXISTING_DATABASE_URL"
   # Strip GUI-tool query params (e.g. ?statusColor=...&name=...) — keep only the DSN
   DATABASE_URL="${REPLY%%\?*}"
 fi
@@ -206,6 +233,17 @@ if [[ "$MACHINE_MODE" == "full" ]]; then
     uv pip install --python .venv/bin/python --require-hashes -r requirements.txt --quiet
   )
   print_info "LiteLLM installed at .venv/bin/litellm"
+
+  if [[ -n "$DATABASE_URL" ]]; then
+    print_header "Generating Prisma client"
+    LITELLM_SCHEMA="$REPO_ROOT/.venv/lib/python3.12/site-packages/litellm/proxy/schema.prisma"
+    (cd "$REPO_ROOT" && PATH="$REPO_ROOT/.venv/bin:$PATH" .venv/bin/prisma generate --schema "$LITELLM_SCHEMA")
+    print_info "Prisma client generated."
+
+    print_header "Applying database schema (prisma db push)"
+    (cd "$REPO_ROOT" && DATABASE_URL="$DATABASE_URL" PATH="$REPO_ROOT/.venv/bin:$PATH" .venv/bin/prisma db push --schema "$LITELLM_SCHEMA")
+    print_info "Database schema applied."
+  fi
 fi
 
 # ── done ─────────────────────────────────────────────────────────────────────
