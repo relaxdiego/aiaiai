@@ -21,6 +21,9 @@ model_list:
     litellm_params:
       model: bedrock/moonshotai.kimi-k2.5
       aws_region_name: os.environ/AWS_REGION
+      # Bedrock's Kimi rejects the `thinking` param that clients may send;
+      # drop unsupported params for this model only (Anthropic models keep them).
+      drop_params: true
 
 general_settings:
   master_key: os.environ/LITELLM_MASTER_KEY
