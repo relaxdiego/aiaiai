@@ -101,7 +101,10 @@ if [[ "$MACHINE_MODE" == "full" ]]; then
     print_info "Generated new master key."
   fi
 else
-  ask "LiteLLM gateway base URL"
+  EXISTING_GATEWAY_URL="$(read_envrc_var GATEWAY_BASE_URL)"
+  EXISTING_MASTER_KEY="$(read_envrc_var LITELLM_MASTER_KEY)"
+
+  ask "LiteLLM gateway base URL" "$EXISTING_GATEWAY_URL"
   GATEWAY_BASE_URL="$REPLY"
   if [[ -z "$GATEWAY_BASE_URL" ]]; then
     print_err "Gateway URL is required."
@@ -111,7 +114,7 @@ else
   printf '\n'
   print_info "To find your master key, run 'make show-key' on the gateway machine."
   printf '\n'
-  ask_secret "LiteLLM master key"
+  ask_secret_with_default "LiteLLM master key" "$EXISTING_MASTER_KEY"
   LITELLM_MASTER_KEY="$REPLY"
   if [[ -z "$LITELLM_MASTER_KEY" ]]; then
     print_err "LiteLLM master key is required."
