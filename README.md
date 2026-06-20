@@ -48,6 +48,8 @@ make setup
 #   Master key: <the same key set on the Mac>
 ```
 
+To use pi.dev on the VM, also follow [Connecting pi.dev](#connecting-pidev).
+
 ## How secrets work
 
 All sensitive values live **only** in `.envrc.local`, which is git-ignored. See `.envrc.local.example` for the full list. Never put actual keys in any committed file.
