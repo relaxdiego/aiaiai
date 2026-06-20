@@ -218,6 +218,17 @@ env["ANTHROPIC_BASE_URL"] = os.environ["ANTHROPIC_BASE_URL"]
 env["ANTHROPIC_AUTH_TOKEN"] = os.environ["ANTHROPIC_AUTH_TOKEN"]
 env["CLAUDE_CODE_ENABLE_GATEWAY_MODEL_DISCOVERY"] = "1"
 
+# Remove stale model-alias overrides; gateway discovery makes them redundant
+# and leftover values produce phantom entries in the /model picker.
+stale_keys = [
+    "ANTHROPIC_DEFAULT_OPUS_MODEL", "ANTHROPIC_DEFAULT_SONNET_MODEL",
+    "ANTHROPIC_DEFAULT_HAIKU_MODEL", "ANTHROPIC_DEFAULT_FABLE_MODEL",
+    "ANTHROPIC_CUSTOM_MODEL_OPTION", "ANTHROPIC_CUSTOM_MODEL_OPTION_NAME",
+    "ANTHROPIC_CUSTOM_MODEL_OPTION_DESCRIPTION",
+]
+for key in stale_keys:
+    env.pop(key, None)
+
 with open(path, "w") as f:
     json.dump(settings, f, indent=2)
     f.write("\n")
