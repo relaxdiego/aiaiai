@@ -195,7 +195,7 @@ mkdir -p "$(dirname "$CLAUDE_SETTINGS")"
 LITELLM_MODELS=()
 while IFS= read -r model; do
   LITELLM_MODELS+=("$model")
-done < <(grep -E '^\s+model_name:' "$REPO_ROOT/litellm/config.yaml" | sed 's/.*model_name:[[:space:]]*//')
+done < <(grep -E '^\s+-\s+model_name:' "$REPO_ROOT/litellm/config.yaml" | sed 's/.*model_name:[[:space:]]*//')
 
 # Read the current default model from settings.json (if any)
 EXISTING_MODEL=$(python3 -c "
