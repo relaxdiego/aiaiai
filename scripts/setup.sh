@@ -184,6 +184,10 @@ if [[ "$SKIP_ENVRC" -eq 0 ]]; then
     printf 'export LITELLM_MASTER_KEY=%s\n' "$LITELLM_MASTER_KEY"
     if [[ "$MACHINE_MODE" == "full" ]]; then
       printf 'export SEARXNG_SECRET=%s\n' "$SEARXNG_SECRET"
+      # URL the websearch_interception callback uses to reach SearXNG. It reads
+      # this env var directly — NOT the api_base in litellm/config.yaml. Must
+      # match searxng/settings.yml's bind_address:port.
+      printf 'export SEARXNG_API_BASE=%s\n' "${SEARXNG_API_BASE:-http://127.0.0.1:8888}"
       [[ -n "$ANTHROPIC_API_KEY" ]] && printf 'export ANTHROPIC_API_KEY=%s\n' "$ANTHROPIC_API_KEY"
       if [[ -n "$AWS_BEARER_TOKEN_BEDROCK" ]]; then
         printf 'export AWS_BEARER_TOKEN_BEDROCK=%s\n' "$AWS_BEARER_TOKEN_BEDROCK"

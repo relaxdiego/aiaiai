@@ -47,6 +47,10 @@ litellm_settings:
 
 # SearXNG runs locally (see searxng/settings.yml, started by process-compose).
 # api_base is the gateway-internal URL; no API key — it's a self-hosted backend.
+# NOTE: the websearch_interception callback does NOT read this api_base — it
+# resolves SearXNG from the SEARXNG_API_BASE env var (set in .envrc.local).
+# Both must point at the same URL; the api_base below covers the search_tools
+# code path, SEARXNG_API_BASE covers the interception code path.
 search_tools:
   - search_tool_name: local-search
     litellm_params:
