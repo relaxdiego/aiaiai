@@ -213,13 +213,14 @@ if not isinstance(settings, dict):
 env = settings.setdefault("env", {})
 env["ANTHROPIC_BASE_URL"] = os.environ["ANTHROPIC_BASE_URL"]
 env["ANTHROPIC_AUTH_TOKEN"] = os.environ["ANTHROPIC_AUTH_TOKEN"]
+env["CLAUDE_CODE_ENABLE_GATEWAY_MODEL_DISCOVERY"] = "1"
 
 with open(path, "w") as f:
     json.dump(settings, f, indent=2)
     f.write("\n")
 PY
 then
-  print_info "Set ANTHROPIC_BASE_URL and ANTHROPIC_AUTH_TOKEN in $CLAUDE_SETTINGS"
+  print_info "Set ANTHROPIC_BASE_URL, ANTHROPIC_AUTH_TOKEN, and CLAUDE_CODE_ENABLE_GATEWAY_MODEL_DISCOVERY in $CLAUDE_SETTINGS"
   print_info "Claude Code now reaches the gateway from any directory."
 else
   print_warn "Could not update $CLAUDE_SETTINGS automatically (existing file is not valid JSON)."
