@@ -200,6 +200,9 @@ fi
 # Code's global settings lets it reach LiteLLM from any directory.
 
 print_header "Configuring Claude Code"
+if ! confirm "Auto-configure Claude Code to use the gateway?"; then
+  print_info "Skipping Claude Code configuration."
+else
 CLAUDE_SETTINGS="$HOME/.claude/settings.json"
 mkdir -p "$(dirname "$CLAUDE_SETTINGS")"
 
@@ -291,6 +294,7 @@ else
   print_warn "Add these by hand under the \"env\" key:"
   print_warn "  \"ANTHROPIC_BASE_URL\": \"$GATEWAY_BASE_URL\""
   print_warn "  \"ANTHROPIC_AUTH_TOKEN\": \"<your LITELLM_MASTER_KEY>\""
+fi
 fi
 
 # ── devbox install ────────────────────────────────────────────────────────────
