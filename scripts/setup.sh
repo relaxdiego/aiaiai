@@ -97,6 +97,8 @@ else
   fi
 fi
 
+DATABASE_URL=""
+
 if [[ "$MACHINE_MODE" == "full" ]]; then
   print_header "Upstream provider keys (written to .envrc.local only — never committed)"
   printf '  Press Enter to skip any provider you are not using.\n'
@@ -115,6 +117,11 @@ if [[ "$MACHINE_MODE" == "full" ]]; then
   if [[ -z "$ANTHROPIC_API_KEY" && -z "$AWS_BEARER_TOKEN_BEDROCK" ]]; then
     print_warn "No provider credentials entered — models won't be callable until you add them to .envrc.local."
   fi
+
+  printf '\n'
+  ask "PostgreSQL database URL (optional, Enter to skip)" ""
+  # Strip GUI-tool query params (e.g. ?statusColor=...&name=...) — keep only the DSN
+  DATABASE_URL="${REPLY%%\?*}"
 fi
 
 # ── write .envrc.local ────────────────────────────────────────────────────────
@@ -140,6 +147,7 @@ if [[ "$SKIP_ENVRC" -eq 0 ]]; then
         printf 'export AWS_BEARER_TOKEN_BEDROCK=%s\n' "$AWS_BEARER_TOKEN_BEDROCK"
         printf 'export AWS_REGION=%s\n' "$AWS_REGION"
       fi
+      [[ -n "$DATABASE_URL" ]] && printf 'export DATABASE_URL=%s\n' "$DATABASE_URL"
     fi
   } > "$ENVRC_LOCAL"
   print_info "Wrote $ENVRC_LOCAL"
