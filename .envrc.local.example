@@ -1,0 +1,11 @@
+# Mode for this machine: "full" (runs LiteLLM locally) or "client" (connects to a remote gateway)
+export MACHINE_MODE=full
+
+# LiteLLM gateway base URL — full mode: http://127.0.0.1:4000 / client mode: http://<host>:4000
+export GATEWAY_BASE_URL=http://127.0.0.1:4000
+
+# Key used to authenticate clients (Claude Code, pi.dev) to the LiteLLM gateway
+export LITELLM_MASTER_KEY=sk-CHANGEME
+
+# --- Full mode only: upstream provider API keys referenced in litellm/config.yaml ---
+export ANTHROPIC_API_KEY=sk-ant-CHANGEME

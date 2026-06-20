@@ -1,0 +1,12 @@
+# Machine-local secrets — never commit
+.envrc.local
+
+# Devbox and direnv local state
+.devbox/
+.direnv/
+
+# Python virtual environment (created by setup wizard in full mode)
+.venv/
+
+# uv resolver cache
+.uv/

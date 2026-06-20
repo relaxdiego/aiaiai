@@ -1,0 +1,8 @@
+# Direct dependency — edit this file, then regenerate requirements.txt:
+#   uv pip compile requirements.in --generate-hashes -o requirements.txt
+#
+# Pinned to 1.89.2 — first stable release past all known CVEs:
+#   CVE-2026-35029, CVE-2026-35030, GHSA-69x8-hrgq-fjj8 fixed in 1.83.0
+#   CVE-2026-42208, CVE-2026-42271 fixed in 1.83.7
+#   Supply chain compromise in 1.82.7 and 1.82.8 — both skipped
+litellm[proxy]==1.89.2
