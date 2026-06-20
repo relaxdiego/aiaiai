@@ -10,3 +10,6 @@
 
 # uv resolver cache
 .uv/
+
+# process-compose service logs (rotated, but the dir itself is local-only)
+logs/

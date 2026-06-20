@@ -33,3 +33,19 @@ litellm_settings:
   budget_duration: 30d
   maximum_spend_logs_retention_period: "7d"     # delete logs older than 7 days
   maximum_spend_logs_retention_interval: "1d"   # run the cleanup job daily
+
+  # Intercept Claude Code's native web_search tool and run it server-side against
+  # the local SearXNG instance, so Bedrock-hosted models gain web search.
+  callbacks: ["websearch_interception"]
+  websearch_interception_params:
+    enabled_providers:
+      - bedrock                # covers every model above
+    search_tool_name: local-search
+
+# SearXNG runs locally (see searxng/settings.yml, started by process-compose).
+# api_base is the gateway-internal URL; no API key — it's a self-hosted backend.
+search_tools:
+  - search_tool_name: local-search
+    litellm_params:
+      search_provider: searxng
+      api_base: http://127.0.0.1:8888

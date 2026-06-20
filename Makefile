@@ -22,4 +22,5 @@ serve:
 	  exit 1; \
 	fi
 	@test -x .venv/bin/litellm || { echo "Error: LiteLLM not installed. Run 'make setup' first."; exit 1; }
-	.venv/bin/litellm --config litellm/config.yaml
+	@mkdir -p logs
+	process-compose up --config process-compose.yaml

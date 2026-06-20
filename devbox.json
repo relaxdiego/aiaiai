@@ -2,7 +2,9 @@
   "$schema": "https://raw.githubusercontent.com/jetify-com/devbox/0.13.6/.schema/devbox.schema.json",
   "packages": [
     "python@3.12",
-    "uv@latest"
+    "uv@latest",
+    "searxng@latest",
+    "process-compose@latest"
   ],
   "shell": {
     "init_hook": []

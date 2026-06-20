@@ -1,0 +1,52 @@
+# Supervises the two full-mode services: SearXNG (web-search backend) and the
+# LiteLLM gateway. LiteLLM waits for SearXNG to pass its health check before
+# starting, so web_search interception works on the first request.
+#
+# Started via `make serve`. Stop with Ctrl-C (stops both).
+version: "0.5"
+
+# All process output is captured to one file with hard-bounded rotation, so logs
+# can never grow unbounded: rotate at 10 MB, keep 3 gzip'd backups, drop >7 days.
+# Upper bound ≈ 10 MB + 3 compressed backups. ./logs is git-ignored.
+log_location: ./logs/process-compose.log
+log_configuration:
+  rotation:
+    max_size_mb: 10
+    max_age_days: 7
+    max_backups: 3
+    compress: true
+
+processes:
+  searxng:
+    # Reads settings from SEARXNG_SETTINGS_PATH; secret from $SEARXNG_SECRET (.envrc.local)
+    command: searxng-run
+    environment:
+      - "SEARXNG_SETTINGS_PATH=searxng/settings.yml"
+    readiness_probe:
+      http_get:
+        host: 127.0.0.1
+        port: 8888
+        path: /healthz
+      initial_delay_seconds: 2
+      period_seconds: 5
+      failure_threshold: 10
+    availability:
+      restart: on_failure
+      max_restarts: 5
+
+  litellm:
+    command: ".venv/bin/litellm --config litellm/config.yaml"
+    depends_on:
+      searxng:
+        condition: process_healthy
+    readiness_probe:
+      http_get:
+        host: 127.0.0.1
+        port: 4000
+        path: /health/liveliness
+      initial_delay_seconds: 5
+      period_seconds: 10
+      failure_threshold: 6
+    availability:
+      restart: on_failure
+      max_restarts: 5

@@ -12,11 +12,13 @@ code to build or test.
 | `.envrc.local` | **Git-ignored.** Machine-local secrets and mode. Copy from `.envrc.local.example` |
 | `.envrc.local.example` | Committed template listing every required env var with placeholders |
 | `devbox.json` | Provisions direnv, Python 3.12, uv |
-| `litellm/config.yaml` | LiteLLM gateway config — model list, routing, budget. Secrets via `os.environ/VAR` |
+| `litellm/config.yaml` | LiteLLM gateway config — model list, routing, budget, web-search interception. Secrets via `os.environ/VAR` |
+| `searxng/settings.yml` | SearXNG config for the local web-search backend. Localhost-only, limiter off (no Redis), secret via `$SEARXNG_SECRET` |
+| `process-compose.yaml` | Supervises SearXNG + LiteLLM (full mode). LiteLLM waits on SearXNG's health check. Bounded log rotation under `logs/` |
 | `requirements.in` | **Edit this** to change the LiteLLM version (one line) |
 | `requirements.txt` | **Generated** — full transitive lockfile with SHA-256 hashes. Regenerate with `uv pip compile requirements.in --generate-hashes -o requirements.txt` |
-| `scripts/setup.sh` | Interactive wizard: asks mode, writes `.envrc.local`, installs devbox packages, installs LiteLLM (full mode only), prints pi.dev connection instructions |
-| `Makefile` | Two targets only: `make setup` and `make serve` |
+| `scripts/setup.sh` | Interactive wizard: asks mode, writes `.envrc.local` (incl. generated `SEARXNG_SECRET`), installs devbox packages, installs LiteLLM (full mode only), prints pi.dev connection instructions |
+| `Makefile` | `make setup`, `make serve` (runs process-compose), plus `show-key` / `show-base-url` helpers |
 
 ## Key design decisions
 
@@ -53,10 +55,27 @@ different machine or VM. Credentials persist to that machine's
 gateway from any directory. From a VM, log in with a host IP from
 `make show-base-url` rather than `127.0.0.1`.
 
+**Web search runs locally via SearXNG.** Bedrock-hosted Claude models have no
+native web search, so `litellm/config.yaml` enables the `websearch_interception`
+callback: it catches Claude Code's `web_search` tool calls and executes them
+against a local SearXNG instance (`search_tools` → `search_provider: searxng`).
+SearXNG is stateless (no DB, no persistent cache) and bound to localhost, so its
+limiter — and therefore Redis — is disabled, keeping it to a single ~150 MB
+process. Its `secret_key` comes from `$SEARXNG_SECRET`, never the repo.
+
+**Two services are supervised by process-compose.** Because LiteLLM depends on
+SearXNG being up, `make serve` runs `process-compose up` rather than a bare
+`litellm` process. SearXNG starts first; LiteLLM waits on its `/healthz` probe.
+process-compose is process-native (no Docker), matching the devbox/nix model.
+All service output goes to `logs/process-compose.log` with hard-bounded rotation
+(10 MB × 3 gzip'd backups, 7-day max), so logs can never grow unbounded.
+
 ## Invariants to maintain
 
 - `requirements.txt` must always be regenerated from `requirements.in` via uv; never hand-edit it.
 - `make serve` must fail clearly on a client-mode machine.
+- SearXNG must stay localhost-bound with the limiter off; never add a public bind without re-enabling protection.
+- process-compose log rotation must stay bounded; `logs/` must stay git-ignored.
 - `scripts/setup.sh` must remain idempotent: safe to re-run, warns before overwriting existing files.
 - `.envrc.local` must stay git-ignored.
 - No file other than `.envrc.local` should ever contain a real secret.

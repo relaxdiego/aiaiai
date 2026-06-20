@@ -100,6 +100,17 @@ if [[ "$MACHINE_MODE" == "full" ]]; then
     LITELLM_MASTER_KEY="sk-$(python3 -c 'import secrets; print(secrets.token_hex(16))')"
     print_info "Generated new master key."
   fi
+
+  # SearXNG (local web-search backend) needs a cryptographic secret_key,
+  # supplied at runtime via SEARXNG_SECRET so it stays out of the repo.
+  EXISTING_SEARXNG_SECRET="$(read_envrc_var SEARXNG_SECRET)"
+  if [[ -n "$EXISTING_SEARXNG_SECRET" ]]; then
+    SEARXNG_SECRET="$EXISTING_SEARXNG_SECRET"
+    print_info "Reusing existing SearXNG secret from .envrc.local"
+  else
+    SEARXNG_SECRET="$(python3 -c 'import secrets; print(secrets.token_hex(32))')"
+    print_info "Generated new SearXNG secret."
+  fi
 else
   EXISTING_GATEWAY_URL="$(read_envrc_var GATEWAY_BASE_URL)"
   EXISTING_MASTER_KEY="$(read_envrc_var LITELLM_MASTER_KEY)"
@@ -172,6 +183,7 @@ if [[ "$SKIP_ENVRC" -eq 0 ]]; then
     printf 'export GATEWAY_BASE_URL=%s\n' "$GATEWAY_BASE_URL"
     printf 'export LITELLM_MASTER_KEY=%s\n' "$LITELLM_MASTER_KEY"
     if [[ "$MACHINE_MODE" == "full" ]]; then
+      printf 'export SEARXNG_SECRET=%s\n' "$SEARXNG_SECRET"
       [[ -n "$ANTHROPIC_API_KEY" ]] && printf 'export ANTHROPIC_API_KEY=%s\n' "$ANTHROPIC_API_KEY"
       if [[ -n "$AWS_BEARER_TOKEN_BEDROCK" ]]; then
         printf 'export AWS_BEARER_TOKEN_BEDROCK=%s\n' "$AWS_BEARER_TOKEN_BEDROCK"
