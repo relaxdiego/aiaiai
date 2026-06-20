@@ -63,23 +63,38 @@ print_info "Mode: $MACHINE_MODE"
 print_header "Gateway configuration"
 
 if [[ "$MACHINE_MODE" == "full" ]]; then
-  DEFAULT_URL="http://127.0.0.1:4000"
+  GATEWAY_BASE_URL="http://127.0.0.1:4000"
+  print_info "Gateway URL: $GATEWAY_BASE_URL (fixed for full mode)"
+
+  EXISTING_KEY=""
+  if [[ -f "$REPO_ROOT/.envrc.local" ]]; then
+    EXISTING_KEY="$(grep -E '^export LITELLM_MASTER_KEY=' "$REPO_ROOT/.envrc.local" | cut -d= -f2- | tr -d "'\""|| true)"
+  fi
+
+  if [[ -n "$EXISTING_KEY" ]]; then
+    LITELLM_MASTER_KEY="$EXISTING_KEY"
+    print_info "Reusing existing master key from .envrc.local"
+  else
+    LITELLM_MASTER_KEY="sk-$(python3 -c 'import secrets; print(secrets.token_hex(16))')"
+    print_info "Generated new master key."
+  fi
 else
-  DEFAULT_URL=""
-fi
+  ask "LiteLLM gateway base URL"
+  GATEWAY_BASE_URL="$REPLY"
+  if [[ -z "$GATEWAY_BASE_URL" ]]; then
+    print_err "Gateway URL is required."
+    exit 1
+  fi
 
-ask "LiteLLM gateway base URL" "$DEFAULT_URL"
-GATEWAY_BASE_URL="$REPLY"
-if [[ -z "$GATEWAY_BASE_URL" ]]; then
-  print_err "Gateway URL is required."
-  exit 1
-fi
-
-ask_secret "LiteLLM master key (used to authenticate clients to the gateway)"
-LITELLM_MASTER_KEY="$REPLY"
-if [[ -z "$LITELLM_MASTER_KEY" ]]; then
-  print_err "LiteLLM master key is required."
-  exit 1
+  printf '\n'
+  print_info "To find your master key, run 'make show-key' on the gateway machine."
+  printf '\n'
+  ask_secret "LiteLLM master key"
+  LITELLM_MASTER_KEY="$REPLY"
+  if [[ -z "$LITELLM_MASTER_KEY" ]]; then
+    print_err "LiteLLM master key is required."
+    exit 1
+  fi
 fi
 
 if [[ "$MACHINE_MODE" == "full" ]]; then
