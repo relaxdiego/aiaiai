@@ -4,9 +4,10 @@ setup:
 	@bash scripts/setup.sh
 
 show-base-url:
-	@ip=$$(ipconfig getifaddr $$(route -n get default 2>/dev/null | awk '/interface:/{print $$2}') 2>/dev/null) \
-	  && echo "http://$$ip:4000" \
-	  || { echo "Error: could not determine LAN IP."; exit 1; }
+	@echo "Possible base URLs (pick the one reachable from your client):"
+	@ifconfig | awk '/^[^ \t]/{split($$1,a,":");iface=a[1]} /inet / && $$2!~/^127\./{printf "  http://%s:4000\t(%s)\n",$$2,iface}'
+	@echo ""
+	@echo "Tip: from a VM, run 'ip route' on the VM — the default gateway is usually this host."
 
 show-key:
 	@if [ ! -f .envrc.local ]; then \

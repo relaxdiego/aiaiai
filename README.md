@@ -52,13 +52,23 @@ make setup
 
 All sensitive values live **only** in `.envrc.local`, which is git-ignored. See `.envrc.local.example` for the full list. Never put actual keys in any committed file.
 
-`.envrc` derives `ANTHROPIC_BASE_URL` and `ANTHROPIC_AUTH_TOKEN` from `.envrc.local` so both Claude Code and pi.dev pick them up automatically.
+`.envrc` derives `ANTHROPIC_BASE_URL` and `ANTHROPIC_AUTH_TOKEN` from `.envrc.local` so Claude Code picks them up automatically.
+
+## Connecting pi.dev
+
+pi.dev connects through the [`pi-provider-litellm`](https://github.com/balcsida/pi-provider-litellm) extension, which auto-discovers the gateway's full model set. Run these once inside pi.dev, on whichever machine or VM runs it:
+
+```
+pi install npm:pi-provider-litellm
+/login litellm
+```
+
+When prompted, give the gateway base URL and your `LITELLM_MASTER_KEY` (`make show-key` on the gateway machine). Credentials persist to that machine's `~/.pi/agent/auth.json`, so pi.dev reaches the gateway from any directory. **From a VM, use a host IP from `make show-base-url` — not `127.0.0.1`.**
 
 ## Repo layout
 
 ```
 litellm/config.yaml       LiteLLM gateway config (model list, routing, budget)
-pi/models.json.example    Template for ~/.pi/agent/models.json
 scripts/setup.sh          Setup wizard (run via make setup)
 .envrc                    Loads devbox env + sources .envrc.local
 .envrc.local.example      Template — copy and fill in for your machine

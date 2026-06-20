@@ -193,36 +193,6 @@ eval "$(cd "$REPO_ROOT" && devbox shellenv)"
 print_header "Enabling direnv"
 (cd "$REPO_ROOT" && direnv allow)
 
-# ── pi.dev models.json ────────────────────────────────────────────────────────
-
-print_header "Configuring pi.dev"
-PI_CONFIG_DIR="$HOME/.pi/agent"
-PI_MODELS_JSON="$PI_CONFIG_DIR/models.json"
-SKIP_PI=0
-
-# pi.dev's anthropic provider appends /messages to baseUrl, so include /v1
-PI_BASE_URL="${GATEWAY_BASE_URL%/}/v1"
-
-if [[ -f "$PI_MODELS_JSON" ]]; then
-  print_warn "$PI_MODELS_JSON already exists."
-  confirm "Overwrite it?" || SKIP_PI=1
-fi
-
-if [[ "$SKIP_PI" -eq 0 ]]; then
-  mkdir -p "$PI_CONFIG_DIR"
-  cat > "$PI_MODELS_JSON" <<EOF
-{
-  "providers": {
-    "anthropic": {
-      "baseUrl": "${PI_BASE_URL}",
-      "apiKey": "\$LITELLM_MASTER_KEY"
-    }
-  }
-}
-EOF
-  print_info "Wrote $PI_MODELS_JSON"
-fi
-
 # ── LiteLLM install (full mode only) ─────────────────────────────────────────
 
 if [[ "$MACHINE_MODE" == "full" ]]; then
@@ -255,3 +225,11 @@ else
   print_info "Clients configured to reach gateway at $GATEWAY_BASE_URL."
 fi
 print_info "Open a new shell in this directory (direnv will load the environment automatically)."
+
+print_header "Connecting pi.dev (optional)"
+print_info "pi.dev auto-discovers the gateway's full model set via an extension."
+print_info "Run these inside pi.dev (on whichever machine/VM runs it):"
+print_info "  pi install npm:pi-provider-litellm"
+print_info "  /login litellm"
+print_info "Base URL: ${GATEWAY_BASE_URL} (from a VM, use a host IP from 'make show-base-url', not 127.0.0.1)"
+print_info "API key:  your LITELLM_MASTER_KEY (run 'make show-key' on the gateway machine)"

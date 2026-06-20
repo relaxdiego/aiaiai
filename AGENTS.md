@@ -13,10 +13,9 @@ code to build or test.
 | `.envrc.local.example` | Committed template listing every required env var with placeholders |
 | `devbox.json` | Provisions direnv, Python 3.12, uv |
 | `litellm/config.yaml` | LiteLLM gateway config — model list, routing, budget. Secrets via `os.environ/VAR` |
-| `pi/models.json.example` | Documents the anthropic provider override written to `~/.pi/agent/models.json` |
 | `requirements.in` | **Edit this** to change the LiteLLM version (one line) |
 | `requirements.txt` | **Generated** — full transitive lockfile with SHA-256 hashes. Regenerate with `uv pip compile requirements.in --generate-hashes -o requirements.txt` |
-| `scripts/setup.sh` | Interactive wizard: asks mode, writes `.envrc.local`, installs devbox packages, writes `~/.pi/agent/models.json`, installs LiteLLM (full mode only) |
+| `scripts/setup.sh` | Interactive wizard: asks mode, writes `.envrc.local`, installs devbox packages, installs LiteLLM (full mode only), prints pi.dev connection instructions |
 | `Makefile` | Two targets only: `make setup` and `make serve` |
 
 ## Key design decisions
@@ -30,7 +29,7 @@ committed file changes.
 `GATEWAY_BASE_URL`. `.envrc` derives everything from it:
 - `ANTHROPIC_BASE_URL=$GATEWAY_BASE_URL` → picked up by Claude Code
 - `ANTHROPIC_AUTH_TOKEN=$LITELLM_MASTER_KEY` → picked up by Claude Code
-- The setup wizard writes `$GATEWAY_BASE_URL/v1` into `~/.pi/agent/models.json` → picked up by pi.dev
+- pi.dev connects to `$GATEWAY_BASE_URL` via the `pi-provider-litellm` extension (see below)
 
 **No secrets in the repo, ever.** All sensitive values live in `.envrc.local`
 (git-ignored). `litellm/config.yaml` references secrets as `os.environ/VAR_NAME`.
@@ -41,9 +40,15 @@ Before finishing any change, grep for leaked keys.
 artifact whose hash doesn't match. To upgrade: edit `requirements.in`, then
 regenerate `requirements.txt`. Never edit `requirements.txt` by hand.
 
-**pi.dev config is written, not symlinked.** The setup wizard generates
-`~/.pi/agent/models.json` with the actual gateway URL substituted in. The
-repo holds `pi/models.json.example` as documentation only.
+**pi.dev connects via an extension, not a written file.** pi.dev uses the
+`pi-provider-litellm` extension, which auto-discovers the gateway's full model
+set from LiteLLM's `/model/info` (or `/v1/models`) endpoint. The setup wizard
+only prints the one-time steps — `pi install npm:pi-provider-litellm` then
+`/login litellm` — because the login is interactive and pi.dev may run on a
+different machine or VM. Credentials persist to that machine's
+`~/.pi/agent/auth.json` (global, not repo-scoped), so pi.dev reaches the
+gateway from any directory. From a VM, log in with a host IP from
+`make show-base-url` rather than `127.0.0.1`.
 
 ## Invariants to maintain
 
