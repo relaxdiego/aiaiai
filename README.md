@@ -54,7 +54,7 @@ To use pi.dev on the VM, also follow [Connecting pi.dev](#connecting-pidev).
 
 All sensitive values live **only** in `.envrc.local`, which is git-ignored. See `.envrc.local.example` for the full list. Never put actual keys in any committed file.
 
-`.envrc` derives `ANTHROPIC_BASE_URL` and `ANTHROPIC_AUTH_TOKEN` from `.envrc.local` so Claude Code picks them up automatically.
+`make setup` writes `ANTHROPIC_BASE_URL` and `ANTHROPIC_AUTH_TOKEN` into your global `~/.claude/settings.json`, so Claude Code reaches the gateway from any directory — not just inside this repo. Re-run `make setup` after rotating the master key to update it.
 
 ## Connecting pi.dev
 

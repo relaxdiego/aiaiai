@@ -180,6 +180,54 @@ if [[ "$SKIP_ENVRC" -eq 0 ]]; then
   print_info "Wrote $ENVRC_LOCAL"
 fi
 
+# ── configure Claude Code globally (~/.claude/settings.json) ──────────────────
+# direnv only loads .envrc inside this repo. Writing the gateway env into Claude
+# Code's global settings lets it reach LiteLLM from any directory.
+
+print_header "Configuring Claude Code"
+CLAUDE_SETTINGS="$HOME/.claude/settings.json"
+mkdir -p "$(dirname "$CLAUDE_SETTINGS")"
+
+if CLAUDE_SETTINGS="$CLAUDE_SETTINGS" \
+   ANTHROPIC_BASE_URL="$GATEWAY_BASE_URL" \
+   ANTHROPIC_AUTH_TOKEN="$LITELLM_MASTER_KEY" \
+   python3 - <<'PY'
+import json, os, sys
+
+path = os.environ["CLAUDE_SETTINGS"]
+
+try:
+    with open(path) as f:
+        text = f.read().strip()
+    settings = json.loads(text) if text else {}
+except FileNotFoundError:
+    settings = {}
+except json.JSONDecodeError as e:
+    print(f"{path} is not valid JSON ({e})", file=sys.stderr)
+    sys.exit(1)
+
+if not isinstance(settings, dict):
+    print(f"{path} is not a JSON object", file=sys.stderr)
+    sys.exit(1)
+
+env = settings.setdefault("env", {})
+env["ANTHROPIC_BASE_URL"] = os.environ["ANTHROPIC_BASE_URL"]
+env["ANTHROPIC_AUTH_TOKEN"] = os.environ["ANTHROPIC_AUTH_TOKEN"]
+
+with open(path, "w") as f:
+    json.dump(settings, f, indent=2)
+    f.write("\n")
+PY
+then
+  print_info "Set ANTHROPIC_BASE_URL and ANTHROPIC_AUTH_TOKEN in $CLAUDE_SETTINGS"
+  print_info "Claude Code now reaches the gateway from any directory."
+else
+  print_warn "Could not update $CLAUDE_SETTINGS automatically (existing file is not valid JSON)."
+  print_warn "Add these by hand under the \"env\" key:"
+  print_warn "  \"ANTHROPIC_BASE_URL\": \"$GATEWAY_BASE_URL\""
+  print_warn "  \"ANTHROPIC_AUTH_TOKEN\": \"<your LITELLM_MASTER_KEY>\""
+fi
+
 # ── devbox install ────────────────────────────────────────────────────────────
 
 print_header "Installing devbox packages"

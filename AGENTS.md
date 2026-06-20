@@ -8,7 +8,7 @@ code to build or test.
 
 | File | Purpose |
 |------|---------|
-| `.envrc` | Loads devbox env; sources `.envrc.local`; derives `ANTHROPIC_BASE_URL` and `ANTHROPIC_AUTH_TOKEN` for clients |
+| `.envrc` | Loads devbox env; sources `.envrc.local` |
 | `.envrc.local` | **Git-ignored.** Machine-local secrets and mode. Copy from `.envrc.local.example` |
 | `.envrc.local.example` | Committed template listing every required env var with placeholders |
 | `devbox.json` | Provisions direnv, Python 3.12, uv |
@@ -26,9 +26,12 @@ a gateway on another host. Only `.envrc.local` differs between machines — no
 committed file changes.
 
 **Single source of truth for the gateway URL.** `.envrc.local` sets
-`GATEWAY_BASE_URL`. `.envrc` derives everything from it:
-- `ANTHROPIC_BASE_URL=$GATEWAY_BASE_URL` → picked up by Claude Code
-- `ANTHROPIC_AUTH_TOKEN=$LITELLM_MASTER_KEY` → picked up by Claude Code
+`GATEWAY_BASE_URL`. Everything else derives from it:
+- `make setup` writes `ANTHROPIC_BASE_URL=$GATEWAY_BASE_URL` and
+  `ANTHROPIC_AUTH_TOKEN=$LITELLM_MASTER_KEY` into the global
+  `~/.claude/settings.json` (`env` block, JSON-merged), so Claude Code reaches
+  the gateway from any directory — not just inside this repo. Re-run `make setup`
+  to resync after changing the URL or key.
 - pi.dev connects to `$GATEWAY_BASE_URL` via the `pi-provider-litellm` extension (see below)
 
 **No secrets in the repo, ever.** All sensitive values live in `.envrc.local`
