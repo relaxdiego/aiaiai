@@ -293,6 +293,15 @@ then
   print_info "Set ANTHROPIC_BASE_URL, ANTHROPIC_AUTH_TOKEN, and CLAUDE_CODE_ENABLE_GATEWAY_MODEL_DISCOVERY in $CLAUDE_SETTINGS"
   [[ -n "$SELECTED_MODEL" ]] && print_info "Default model: $SELECTED_MODEL"
   print_info "Claude Code now reaches the gateway from any directory."
+
+  # Remove any stored login credentials. A token left in ~/.claude/.credentials.json
+  # by a prior `/login` can take precedence over the ANTHROPIC_AUTH_TOKEN we just
+  # wrote, silently sending a stale key to the gateway instead of the master key.
+  CLAUDE_CREDS="$HOME/.claude/.credentials.json"
+  if [[ -f "$CLAUDE_CREDS" ]]; then
+    rm -f "$CLAUDE_CREDS"
+    print_warn "Removed $CLAUDE_CREDS so the gateway key in settings.json takes effect."
+  fi
 else
   print_warn "Could not update $CLAUDE_SETTINGS automatically (existing file is not valid JSON)."
   print_warn "Add these by hand under the \"env\" key:"
