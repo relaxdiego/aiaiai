@@ -70,8 +70,13 @@ When prompted, give the gateway base URL and your `LITELLM_MASTER_KEY` (`make sh
 ## Repo layout
 
 ```
-litellm/config.yaml       LiteLLM gateway config (model list, routing, budget)
-scripts/setup.sh          Setup wizard (run via make setup)
-.envrc                    Loads devbox env + sources .envrc.local
-.envrc.local.example      Template — copy and fill in for your machine
+litellm/config.yaml.example   LiteLLM gateway config template (model list, routing, budget)
+searxng/settings.yml.example  SearXNG web-search backend config template
+scripts/setup.sh              Setup wizard (run via make setup; renders the templates)
+.envrc                        Loads devbox env + sources .envrc.local
+.envrc.local.example          Template — copy and fill in for your machine
+
+The live litellm/config.yaml and searxng/settings.yml are generated from the
+*.example templates by `make setup` and are git-ignored. Edit the templates,
+not the generated files.
 ```

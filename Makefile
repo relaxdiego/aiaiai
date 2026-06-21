@@ -22,5 +22,7 @@ serve:
 	  exit 1; \
 	fi
 	@test -x .venv/bin/litellm || { echo "Error: LiteLLM not installed. Run 'make setup' first."; exit 1; }
+	@test -f litellm/config.yaml || { echo "Error: litellm/config.yaml not found (generated from litellm/config.yaml.example). Run 'make setup' first."; exit 1; }
+	@test -f searxng/settings.yml || { echo "Error: searxng/settings.yml not found (generated from searxng/settings.yml.example). Run 'make setup' first."; exit 1; }
 	@mkdir -p logs
 	process-compose up --config process-compose.yaml

@@ -32,7 +32,10 @@ general_settings:
   store_prompts_in_spend_logs: true
 
 litellm_settings:
-  max_budget: 120.0
+  # Rendered from LITELLM_MAX_BUDGET in .envrc.local by `make setup`. Kept a
+  # literal here (not os.environ/) because LiteLLM < v1.90.0 does not coerce an
+  # env-sourced max_budget to a number — see AGENTS.md.
+  max_budget: __LITELLM_MAX_BUDGET__
   budget_duration: 30d
   maximum_spend_logs_retention_period: "7d"     # delete logs older than 7 days
   maximum_spend_logs_retention_interval: "1d"   # run the cleanup job daily
