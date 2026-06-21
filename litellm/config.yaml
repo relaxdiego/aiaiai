@@ -32,7 +32,7 @@ general_settings:
   store_prompts_in_spend_logs: true
 
 litellm_settings:
-  max_budget: 100.0
+  max_budget: 120.0
   budget_duration: 30d
   maximum_spend_logs_retention_period: "7d"     # delete logs older than 7 days
   maximum_spend_logs_retention_interval: "1d"   # run the cleanup job daily
