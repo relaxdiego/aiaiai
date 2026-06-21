@@ -1,10 +1,8 @@
 # aiaiai
 
-Configuration repo that wires **Claude Code** and **pi.dev** to a **LiteLLM** model gateway for unified spend tracking and routing. Nothing sensitive lives here.
+Sets up a **LiteLLM** model gateway for unified spend tracking and routing. Optionally wires Claude Code to it.
 
 ## Prerequisites
-
-Install these yourself before cloning:
 
 - [devbox](https://www.jetify.com/devbox/docs/installing_devbox/) — manages per-repo tooling (Python, uv, direnv)
 - [direnv](https://direnv.net/docs/installation.html) — loads `.envrc` on `cd`
@@ -14,16 +12,10 @@ Install these yourself before cloning:
 ## Quick start
 
 ```bash
-git clone <this-repo> aiaiai
+git clone https://github.com/relaxdiego/aiaiai.git
 cd aiaiai
 make setup      # interactive wizard: asks mode, writes .envrc.local, installs LiteLLM (full mode)
 direnv allow    # load env into current shell (wizard does this, but re-run after new clones)
-```
-
-On a **full-mode** machine (the one that runs the gateway):
-
-```bash
-make serve      # starts LiteLLM on http://127.0.0.1:4000
 ```
 
 ## Two modes
@@ -35,17 +27,22 @@ make serve      # starts LiteLLM on http://127.0.0.1:4000
 
 `make setup` asks which mode this machine is, then configures everything. The same repo works for both — only `.envrc.local` differs per machine.
 
+## Launch the gateway
+
+On a **full-mode** machine (the one that runs the gateway):
+
+```bash
+make serve      # starts LiteLLM on http://127.0.0.1:4000
+```
+
 ### Client-only example (VM → Mac host)
 
 On the Mac, run `make serve`. Then on the VM:
 
 ```bash
-git clone <this-repo> aiaiai && cd aiaiai
+git clone https://github.com/relaxdiego/aiaiai.git
+cd aiaiai
 make setup
-# When prompted:
-#   Mode: client
-#   Gateway URL: http://<mac-ip>:4000
-#   Master key: <the same key set on the Mac>
 ```
 
 To use pi.dev on the VM, also follow [Connecting pi.dev](#connecting-pidev).
@@ -66,17 +63,3 @@ pi install npm:pi-provider-litellm
 ```
 
 When prompted, give the gateway base URL and your `LITELLM_MASTER_KEY` (`make show-key` on the gateway machine). Credentials persist to that machine's `~/.pi/agent/auth.json`, so pi.dev reaches the gateway from any directory. **From a VM, use a host IP from `make show-base-url` — not `127.0.0.1`.**
-
-## Repo layout
-
-```
-litellm/config.yaml.example   LiteLLM gateway config template (model list, routing, budget)
-searxng/settings.yml.example  SearXNG web-search backend config template
-scripts/setup.sh              Setup wizard (run via make setup; renders the templates)
-.envrc                        Loads devbox env + sources .envrc.local
-.envrc.local.example          Template — copy and fill in for your machine
-
-The live litellm/config.yaml and searxng/settings.yml are generated from the
-*.example templates by `make setup` and are git-ignored. Edit the templates,
-not the generated files.
-```
