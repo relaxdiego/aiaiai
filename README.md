@@ -1,4 +1,4 @@
-# aiaiai
+# aiaiai (Ayayay!)
 
 Sets up a **LiteLLM** model gateway for unified spend tracking and routing. Optionally wires Claude Code to it.
 
