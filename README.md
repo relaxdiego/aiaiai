@@ -6,6 +6,7 @@ Sets up a **LiteLLM** model gateway for unified spend tracking and routing. Opti
 
 - [devbox](https://www.jetify.com/devbox/docs/installing_devbox/) — manages per-repo tooling (Python, uv, direnv)
 - [direnv](https://direnv.net/docs/installation.html) — loads `.envrc` on `cd`
+- PostgreSQL database — required in full mode for persistent spend tracking and budget enforcement
 - [Claude Code](https://docs.anthropic.com/en/docs/claude-code) — Anthropic's AI coding CLI
 - [pi.dev](https://pi.dev/) — minimal AI agent harness
 
