@@ -50,6 +50,35 @@ read_envrc_var() {
   grep -E "^export ${var}=" "$REPO_ROOT/.envrc.local" | cut -d= -f2- | tr -d "'\"" || true
 }
 
+validate_postgres_url() {
+  DATABASE_URL_TO_VALIDATE="$1" python3 - <<'PY'
+import os
+import sys
+from urllib.parse import urlparse
+
+url = os.environ["DATABASE_URL_TO_VALIDATE"]
+try:
+    parsed = urlparse(url)
+    # Accessing .port also validates that an explicitly supplied port is numeric
+    # and within range.
+    parsed.port
+    hostname = parsed.hostname
+except ValueError:
+    sys.exit(1)
+
+if parsed.scheme not in {"postgres", "postgresql"}:
+    sys.exit(1)
+if any(char.isspace() for char in url):
+    sys.exit(1)
+if parsed.fragment:
+    sys.exit(1)
+if not parsed.path or parsed.path == "/":
+    sys.exit(1)
+if hostname is None and not url.startswith(("postgres:///", "postgresql:///")):
+    sys.exit(1)
+PY
+}
+
 confirm() {
   printf '  %s [y/N]: ' "$1"
   read -r REPLY
@@ -186,9 +215,17 @@ if [[ "$MACHINE_MODE" == "full" ]]; then
   fi
 
   printf '\n'
-  ask_secret_with_default "PostgreSQL database URL (optional, Enter to skip)" "$EXISTING_DATABASE_URL"
-  # Strip GUI-tool query params (e.g. ?statusColor=...&name=...) — keep only the DSN
-  DATABASE_URL="${REPLY%%\?*}"
+  while true; do
+    ask_secret_with_default "PostgreSQL database URL (required)" "$EXISTING_DATABASE_URL"
+    DATABASE_URL="${REPLY%%\?*}"
+    if [[ -z "$DATABASE_URL" ]]; then
+      print_warn "A PostgreSQL database is required for spend tracking and budget enforcement."
+    elif validate_postgres_url "$DATABASE_URL"; then
+      break
+    else
+      print_warn "Enter a valid PostgreSQL URL, for example: postgresql://user:password@127.0.0.1/litellm"
+    fi
+  done
 fi
 
 # ── write .envrc.local ────────────────────────────────────────────────────────
@@ -375,16 +412,32 @@ if [[ "$MACHINE_MODE" == "full" ]]; then
   )
   print_info "LiteLLM installed at .venv/bin/litellm"
 
-  if [[ -n "$DATABASE_URL" ]]; then
-    print_header "Generating Prisma client"
-    LITELLM_SCHEMA="$REPO_ROOT/.venv/lib/python3.12/site-packages/litellm/proxy/schema.prisma"
-    (cd "$REPO_ROOT" && PATH="$REPO_ROOT/.venv/bin:$PATH" .venv/bin/prisma generate --schema "$LITELLM_SCHEMA")
-    print_info "Prisma client generated."
-
-    print_header "Applying database schema (prisma db push)"
-    (cd "$REPO_ROOT" && DATABASE_URL="$DATABASE_URL" PATH="$REPO_ROOT/.venv/bin:$PATH" .venv/bin/prisma db push --schema "$LITELLM_SCHEMA")
-    print_info "Database schema applied."
+  LITELLM_SCHEMA="$REPO_ROOT/.venv/lib/python3.12/site-packages/litellm/proxy/schema.prisma"
+  if [[ ! -f "$LITELLM_SCHEMA" ]]; then
+    print_err "LiteLLM's Prisma schema was not installed at $LITELLM_SCHEMA."
+    print_err "Remove .venv and re-run 'make setup'."
+    exit 1
   fi
+
+  print_header "Checking PostgreSQL connection"
+  if ! printf 'SELECT 1;\n' | (
+    cd "$REPO_ROOT"
+    DATABASE_URL="$DATABASE_URL" PATH="$REPO_ROOT/.venv/bin:$PATH" \
+      .venv/bin/prisma db execute --stdin --schema "$LITELLM_SCHEMA"
+  ) >/dev/null; then
+    print_err "Could not connect to PostgreSQL using DATABASE_URL."
+    print_err "Verify the server, database, credentials, and TLS options, then re-run 'make setup'."
+    exit 1
+  fi
+  print_info "PostgreSQL connection verified."
+
+  print_header "Generating Prisma client"
+  (cd "$REPO_ROOT" && PATH="$REPO_ROOT/.venv/bin:$PATH" .venv/bin/prisma generate --schema "$LITELLM_SCHEMA")
+  print_info "Prisma client generated."
+
+  print_header "Applying database schema (prisma db push)"
+  (cd "$REPO_ROOT" && DATABASE_URL="$DATABASE_URL" PATH="$REPO_ROOT/.venv/bin:$PATH" .venv/bin/prisma db push --schema "$LITELLM_SCHEMA")
+  print_info "Database schema applied."
 fi
 
 # ── done ─────────────────────────────────────────────────────────────────────
