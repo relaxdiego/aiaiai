@@ -1,4 +1,20 @@
 model_list:
+  # Anthropic API — available when ANTHROPIC_API_KEY is configured.
+  - model_name: claude-opus-4-8-anthropic
+    litellm_params:
+      model: anthropic/claude-opus-4-8
+      api_key: os.environ/ANTHROPIC_API_KEY
+
+  - model_name: claude-sonnet-4-6-anthropic
+    litellm_params:
+      model: anthropic/claude-sonnet-4-6
+      api_key: os.environ/ANTHROPIC_API_KEY
+
+  - model_name: claude-haiku-4-5-20251001-anthropic
+    litellm_params:
+      model: anthropic/claude-haiku-4-5-20251001
+      api_key: os.environ/ANTHROPIC_API_KEY
+
   # AWS Bedrock — latest opus, sonnet, haiku, Kimi (us. cross-region profiles)
   # Auth: LiteLLM reads the bearer token from the AWS_BEARER_TOKEN_BEDROCK
   # env var automatically; it is not a valid litellm_param.
