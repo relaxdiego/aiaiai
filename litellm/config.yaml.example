@@ -30,6 +30,8 @@ general_settings:
   database_url: os.environ/DATABASE_URL
   store_model_in_db: true
   store_prompts_in_spend_logs: true
+  maximum_spend_logs_retention_period: "7d"     # delete logs older than 7 days
+  maximum_spend_logs_retention_interval: "1d"   # run the cleanup job daily
 
 litellm_settings:
   # Rendered from LITELLM_MAX_BUDGET in .envrc.local by `make setup`. Kept a
@@ -37,8 +39,6 @@ litellm_settings:
   # env-sourced max_budget to a number — see AGENTS.md.
   max_budget: __LITELLM_MAX_BUDGET__
   budget_duration: 30d
-  maximum_spend_logs_retention_period: "7d"     # delete logs older than 7 days
-  maximum_spend_logs_retention_interval: "1d"   # run the cleanup job daily
 
   # Intercept Claude Code's native web_search tool and run it server-side against
   # the local SearXNG instance, so Bedrock-hosted models gain web search.
