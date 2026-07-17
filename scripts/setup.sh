@@ -335,13 +335,28 @@ then
   [[ -n "$SELECTED_MODEL" ]] && print_info "Default model: $SELECTED_MODEL"
   print_info "Claude Code now reaches the gateway from any directory."
 
-  # Remove any stored login credentials. A token left in ~/.claude/.credentials.json
-  # by a prior `/login` can take precedence over the ANTHROPIC_AUTH_TOKEN we just
-  # wrote, silently sending a stale key to the gateway instead of the master key.
+  # Stored login credentials can take precedence over ANTHROPIC_AUTH_TOKEN.
+  # Do not modify this global login state without a separate explicit confirmation,
+  # and preserve a recoverable backup when the user opts in.
   CLAUDE_CREDS="$HOME/.claude/.credentials.json"
   if [[ -f "$CLAUDE_CREDS" ]]; then
-    rm -f "$CLAUDE_CREDS"
-    print_warn "Removed $CLAUDE_CREDS so the gateway key in settings.json takes effect."
+    print_warn "Found stored Claude login credentials at $CLAUDE_CREDS."
+    print_warn "They may override the gateway token configured in settings.json."
+    if confirm "Backup and disable the stored Claude login credentials?"; then
+      CLAUDE_CREDS_BACKUP_BASE="${CLAUDE_CREDS}.gateway-backup.$(date -u +%Y%m%dT%H%M%SZ)"
+      CLAUDE_CREDS_BACKUP="$CLAUDE_CREDS_BACKUP_BASE"
+      BACKUP_SUFFIX=0
+      while [[ -e "$CLAUDE_CREDS_BACKUP" ]]; do
+        BACKUP_SUFFIX=$((BACKUP_SUFFIX + 1))
+        CLAUDE_CREDS_BACKUP="${CLAUDE_CREDS_BACKUP_BASE}.${BACKUP_SUFFIX}"
+      done
+      mv "$CLAUDE_CREDS" "$CLAUDE_CREDS_BACKUP"
+      print_warn "Moved stored credentials to $CLAUDE_CREDS_BACKUP."
+      print_info "Restore that file to $CLAUDE_CREDS to resume the previous Claude login."
+    else
+      print_warn "Kept stored Claude login credentials unchanged."
+      print_warn "If gateway authentication fails, move $CLAUDE_CREDS aside and restart Claude Code."
+    fi
   fi
 else
   print_warn "Could not update $CLAUDE_SETTINGS automatically (existing file is not valid JSON)."
