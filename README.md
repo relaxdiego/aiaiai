@@ -12,6 +12,9 @@ Sets up a **LiteLLM** model gateway for unified spend tracking and routing. Opti
 ## Quick start
 
 ```bash
+# Install Devbox before entering the repository. Skip this if it is already installed.
+curl -fsSL https://get.jetify.com/devbox | bash
+
 git clone https://github.com/relaxdiego/aiaiai.git
 cd aiaiai
 make setup      # interactive wizard: asks mode, writes .envrc.local, installs LiteLLM (full mode)
