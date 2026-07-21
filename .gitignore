@@ -1,5 +1,6 @@
 # Machine-local secrets — never commit
 .envrc.local
+.envrc.local.tmp.*
 
 # Devbox and direnv local state
 .devbox/
