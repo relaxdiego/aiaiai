@@ -1,68 +1,129 @@
 # aiaiai (Ayayay!)
 
-Sets up a **LiteLLM** model gateway for unified spend tracking and routing. Optionally wires Claude Code to it.
+Runs the model backend for your coding agents on your workstation. Agents such as Claude Code, OpenCode, and pi.dev run in an isolated VM and reach it over HTTP.
+
+```
+ coding-agent VM                      workstation (Linux or macOS)
+┌──────────────────┐                ┌─────────────────────────────────────────┐
+│ Claude Code      │  HTTP :4000    │ LiteLLM ──► AWS Bedrock                 │
+│ OpenCode         │ ─────────────► │   │  ├──► SearXNG   127.0.0.1:8888      │
+│ pi.dev ...       │  per-agent key │   │  └──► Postgres  127.0.0.1:5439      │
+└──────────────────┘                └─────────────────────────────────────────┘
+```
+
+- **LiteLLM** is the gateway. It routes to Bedrock models, enforces a spend cap, and speaks both the OpenAI and Anthropic APIs.
+- **SearXNG** gives agents web search with no paid API. Only LiteLLM talks to it.
+- **Postgres** stores per-agent keys and spend logs.
+
+process-compose supervises all three. devbox provides every tool, so nothing is installed system-wide.
 
 ## Prerequisites
 
-- [devbox](https://www.jetify.com/devbox/docs/installing_devbox/) — manages per-repo tooling (Python, uv, direnv)
-- [direnv](https://direnv.net/docs/installation.html) — loads `.envrc` on `cd`
-- [Claude Code](https://docs.anthropic.com/en/docs/claude-code) — Anthropic's AI coding CLI
-- [pi.dev](https://pi.dev/) — minimal AI agent harness
+- [devbox](https://www.jetify.com/devbox/docs/installing_devbox/)
+- `make`, `git`, `curl`, and `openssl`, which ship with macOS and most Linux distributions
+- [direnv](https://direnv.net/docs/installation.html) (optional) loads the environment when you `cd` into the repo
 
 ## Quick start
 
 ```bash
-# Install Devbox before entering the repository. Skip this if it is already installed.
-curl -fsSL https://get.jetify.com/devbox | bash
-
 git clone https://github.com/relaxdiego/aiaiai.git
 cd aiaiai
-make setup      # interactive wizard: asks mode, writes .envrc.local, installs LiteLLM (full mode)
-direnv allow    # load env into current shell (wizard does this, but re-run after new clones)
+make setup                    # asks for a listen address, budget, and Bedrock token
+make start                    # starts the backend in the background
+make new-key NAME=opencode    # one key per agent
+make show-base-url            # the URL to give your agents
 ```
 
-## Two modes
+## Choose the listen address
 
-| Mode | What runs here | When to use |
-|------|---------------|-------------|
-| **full** | LiteLLM gateway + clients | Your Mac, primary workstation |
-| **client** | Clients only (Claude Code, pi.dev) | A VM or secondary machine that points at the Mac |
+LiteLLM listens on the single address you give `make setup`. Pick the workstation's address on the network your VM uses. Then only the VM, and not your whole LAN, can reach the gateway.
 
-`make setup` asks which mode this machine is, then configures everything. The same repo works for both — only `.envrc.local` differs per machine.
+The wizard lists this machine's addresses. Common choices:
 
-## Launch the gateway
+- libvirt or virt-manager on Linux uses `virbr0`, usually `192.168.122.1`.
+- On macOS, VM apps create a bridge interface such as `bridge100`. Its address is the one the VM sees as its default gateway.
+- `127.0.0.1` works when agents run on the workstation itself.
+- `0.0.0.0` listens on every interface. Only the keys protect it then.
 
-On a **full-mode** machine (the one that runs the gateway):
+To check from inside the VM, run `ip route`. The default gateway is usually the workstation. Then `curl http://<address>:4000/health/liveliness` should print `"I'm alive!"`. If it can't connect, allow port 4000 on that interface in the workstation's firewall.
 
-```bash
-make serve      # starts LiteLLM on http://127.0.0.1:4000
+Re-run `make setup` any time to change the address, budget, or Bedrock token. It keeps generated secrets and any lines you added to `.envrc.local`.
+
+## Commands
+
+| Command | What it does |
+|---|---|
+| `make setup` | Writes `.envrc.local`, renders service configs, installs LiteLLM, initializes Postgres. Safe to re-run. |
+| `make start` | Starts all services in the background. |
+| `make serve` | Starts them in the foreground with the process-compose dashboard. |
+| `make status` | Lists the services and their health. |
+| `make stop` | Stops all services. |
+| `make new-key NAME=<agent> [BUDGET=<usd>]` | Mints a key for one agent, optionally with its own 30-day budget. |
+| `make show-base-url` | Prints `http://<listen address>:4000`. |
+| `make show-key` | Prints the master key. Keep it on the workstation. |
+
+Logs go to `logs/process-compose.log` and rotate at 10 MB.
+
+## Connect your agents
+
+Give each agent its own key from `make new-key`. You can then see spend per agent and revoke one key without touching the others. The examples use `http://192.168.122.1:4000`. Replace it with the output of `make show-base-url`.
+
+**Claude Code.** Add this to `~/.claude/settings.json` in the VM:
+
+```json
+{
+  "env": {
+    "ANTHROPIC_BASE_URL": "http://192.168.122.1:4000",
+    "ANTHROPIC_AUTH_TOKEN": "<key from make new-key NAME=claude-code>",
+    "CLAUDE_CODE_ENABLE_GATEWAY_MODEL_DISCOVERY": "1"
+  }
+}
 ```
 
-### Client-only example (VM → Mac host)
+If you previously ran `/login`, log out first. A stored login takes precedence over `ANTHROPIC_AUTH_TOKEN`. Claude Code's `web_search` tool works through the gateway.
 
-On the Mac, run `make serve`. Then on the VM:
+**OpenCode.** Add a provider to `opencode.json` and export `AIAIAI_KEY` in the VM:
 
-```bash
-git clone https://github.com/relaxdiego/aiaiai.git
-cd aiaiai
-make setup
+```json
+{
+  "$schema": "https://opencode.ai/config.json",
+  "provider": {
+    "aiaiai": {
+      "npm": "@ai-sdk/openai-compatible",
+      "name": "aiaiai",
+      "options": {
+        "baseURL": "http://192.168.122.1:4000/v1",
+        "apiKey": "{env:AIAIAI_KEY}"
+      },
+      "models": {
+        "claude-sonnet-4-6-bedrock": { "name": "Claude Sonnet 4.6" }
+      }
+    }
+  }
+}
 ```
 
-To use pi.dev on the VM, also follow [Connecting pi.dev](#connecting-pidev).
-
-## How secrets work
-
-All sensitive values live **only** in `.envrc.local`, which is git-ignored. See `.envrc.local.example` for the full list. Never put actual keys in any committed file.
-
-`make setup` writes `ANTHROPIC_BASE_URL` and `ANTHROPIC_AUTH_TOKEN` into your global `~/.claude/settings.json`, so Claude Code reaches the gateway from any directory — not just inside this repo. Re-run `make setup` after rotating the master key to update it.
-
-## Connecting pi.dev
-
-pi.dev connects through the [`pi-provider-litellm`](https://github.com/balcsida/pi-provider-litellm) extension, which auto-discovers the gateway's full model set. Run these once inside pi.dev, on whichever machine or VM runs it:
+**pi.dev.** Install the [`pi-provider-litellm`](https://github.com/balcsida/pi-provider-litellm) extension, which discovers the gateway's models:
 
 ```
 pi install npm:pi-provider-litellm
 /login litellm
 ```
 
-When prompted, give the gateway base URL and your `LITELLM_MASTER_KEY` (`make show-key` on the gateway machine). Credentials persist to that machine's `~/.pi/agent/auth.json`, so pi.dev reaches the gateway from any directory. **From a VM, use a host IP from `make show-base-url` — not `127.0.0.1`.**
+Enter the base URL and the agent's key when prompted.
+
+**Web search from any agent.** `POST /v1/search/local-search` with `{"query": "..."}` and the agent's key returns SearXNG results. Clients that don't use Claude's built-in `web_search` tool can call it from a tool or MCP server.
+
+## Secrets
+
+Secrets live only in `.envrc.local`, which is git-ignored and created with mode 600. The same goes for the rendered configs, `data/`, and `logs/`. `.envrc.local.example` lists every variable.
+
+## Validating changes
+
+The repo ships a `validate-aiaiai` agent skill in `.agent/skills/`, linked into `.claude/skills` and `.pi/skills`. It copies the working tree to a scratch directory, runs `make setup` and `make start` there, and drives every feature in its [feature map](.agent/skills/validate-aiaiai/features/README.md). To run it by hand:
+
+```bash
+.agent/skills/validate-aiaiai/scripts/validate.sh run
+```
+
+It needs ports 4000, 8888, and 5439 free, so stop your own instance first.
