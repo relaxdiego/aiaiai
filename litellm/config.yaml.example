@@ -1,29 +1,40 @@
 model_list:
-  # AWS Bedrock — latest opus, sonnet, haiku, Kimi (us. cross-region profiles)
-  # Auth: LiteLLM reads the bearer token from the AWS_BEARER_TOKEN_BEDROCK
-  # env var automatically; it is not a valid litellm_param.
-  - model_name: claude-opus-4-8-bedrock
+  # Claude Code model IDs mapped to GitHub Copilot models. Prices per token from
+  # https://docs.github.com/en/copilot/reference/copilot-billing/models-and-pricing
+  # No wildcard route: an unpriced model would bill at 0 and escape max_budget.
+  # LiteLLM signs in with the tokens in GITHUB_COPILOT_TOKEN_DIR (see
+  # process-compose.yaml), written by `make copilot-login`.
+  - model_name: claude-fable-5-1
     litellm_params:
-      model: bedrock/us.anthropic.claude-opus-4-8
-      aws_region_name: os.environ/AWS_REGION
+      model: github_copilot/claude-fable-5.1
+      input_cost_per_token: 1.0e-05
+      output_cost_per_token: 5.0e-05
+      cache_read_input_token_cost: 2.5e-07
+      cache_creation_input_token_cost: 1.25e-05
 
-  - model_name: claude-sonnet-4-6-bedrock
+  - model_name: claude-opus-5
     litellm_params:
-      model: bedrock/us.anthropic.claude-sonnet-4-6
-      aws_region_name: os.environ/AWS_REGION
+      model: github_copilot/claude-opus-5
+      input_cost_per_token: 5.0e-06
+      output_cost_per_token: 2.5e-05
+      cache_read_input_token_cost: 5.0e-07
+      cache_creation_input_token_cost: 6.25e-06
 
-  - model_name: claude-haiku-4-5-20251001-bedrock
+  - model_name: claude-sonnet-5
     litellm_params:
-      model: bedrock/us.anthropic.claude-haiku-4-5-20251001-v1:0
-      aws_region_name: os.environ/AWS_REGION
+      model: github_copilot/claude-sonnet-5
+      input_cost_per_token: 2.0e-06
+      output_cost_per_token: 1.0e-05
+      cache_read_input_token_cost: 2.0e-07
+      cache_creation_input_token_cost: 2.5e-06
 
-  - model_name: kimi-k2.5-bedrock
+  - model_name: claude-haiku-4-5-20251001
     litellm_params:
-      model: bedrock/moonshotai.kimi-k2.5
-      aws_region_name: os.environ/AWS_REGION
-      # Bedrock's Kimi rejects the `thinking` param that clients may send;
-      # drop unsupported params for this model only (Anthropic models keep them).
-      drop_params: true
+      model: github_copilot/claude-haiku-4.5
+      input_cost_per_token: 1.0e-06
+      output_cost_per_token: 5.0e-06
+      cache_read_input_token_cost: 1.0e-07
+      cache_creation_input_token_cost: 1.25e-06
 
 general_settings:
   master_key: os.environ/LITELLM_MASTER_KEY
@@ -41,12 +52,12 @@ litellm_settings:
   maximum_spend_logs_retention_period: "7d"     # delete logs older than 7 days
   maximum_spend_logs_retention_interval: "1d"   # run the cleanup job daily
 
-  # Intercept Claude Code's native web_search tool and run it server-side against
-  # the local SearXNG instance, so Bedrock-hosted models gain web search.
+  # Copilot has no web search. Claude Code sends web_search as a standalone
+  # request, which LiteLLM answers from SearXNG without calling Copilot.
   callbacks: ["websearch_interception"]
   websearch_interception_params:
     enabled_providers:
-      - bedrock                # covers every model above
+      - github_copilot
     search_tool_name: local-search
 
 # SearXNG runs locally under process-compose. The searxng provider finds it

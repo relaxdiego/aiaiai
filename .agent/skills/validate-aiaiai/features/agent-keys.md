@@ -34,4 +34,4 @@ Preconditions:
 - LiteLLM rejects a duplicate alias with HTTP 400. The alias carries a timestamp so the feature can be driven again on the same instance.
 - No make target revokes a key. The user calls `POST /key/delete` with the master key. The harness does not drive revocation.
 - The proxy-wide `max_budget` in `litellm/config.yaml` still caps every key. A `BUDGET` above it does not raise the limit.
-- Agent keys cannot send `mock_response`, so a chat call with one would hit Bedrock. Chat formats are proven in `gateway-api` with a dedicated mock key.
+- Agent keys cannot send `mock_response`, so a chat call with one would go to Copilot. Chat formats are proven in `gateway-api` with a dedicated mock key.

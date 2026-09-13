@@ -53,6 +53,7 @@ processes:
     environment:
       - "DATABASE_URL=postgresql://litellm:${POSTGRES_PASSWORD}@127.0.0.1:5439/litellm"
       - "SEARXNG_API_BASE=http://127.0.0.1:8888"
+      - "GITHUB_COPILOT_TOKEN_DIR=data/github_copilot"
       # Keep LiteLLM on the data bundled in the pinned wheel instead of
       # fetching it from GitHub main at runtime.
       - "LITELLM_LOCAL_MODEL_COST_MAP=True"

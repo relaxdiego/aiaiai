@@ -4,7 +4,7 @@ set -euo pipefail
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 ENVRC_LOCAL="$REPO_ROOT/.envrc.local"
 # Written by older versions of this wizard; nothing reads them anymore.
-RETIRED_VARS="MACHINE_MODE GATEWAY_BASE_URL ANTHROPIC_API_KEY DATABASE_URL SEARXNG_API_BASE"
+RETIRED_VARS="MACHINE_MODE GATEWAY_BASE_URL ANTHROPIC_API_KEY DATABASE_URL SEARXNG_API_BASE AWS_BEARER_TOKEN_BEDROCK AWS_REGION"
 
 # ── helpers ──────────────────────────────────────────────────────────────────
 
@@ -19,24 +19,6 @@ ask() {
   printf '  %s%s: ' "$prompt" "$display_default"
   read -r REPLY
   REPLY="${REPLY:-$default}"
-}
-
-# Show first 6 chars of a secret followed by "..." for verification
-mask_value() {
-  local val="$1" n=6
-  if [[ ${#val} -lt $n ]]; then n=${#val}; fi
-  printf '%s...' "${val:0:$n}"
-}
-
-# Like ask but hides input, shows a masked hint, and keeps existing value on Enter
-ask_secret_with_default() {
-  local prompt="$1" existing="$2"
-  local hint=""
-  if [[ -n "$existing" ]]; then hint=" [$(mask_value "$existing"), Enter to keep]"; fi
-  printf '  %s%s: ' "$prompt" "$hint"
-  read -rs REPLY
-  printf '\n'
-  if [[ -z "$REPLY" && -n "$existing" ]]; then REPLY="$existing"; fi
 }
 
 # Read a variable's value from .envrc.local (strips quotes)
@@ -135,16 +117,6 @@ while true; do
 done
 LITELLM_MAX_BUDGET="$REPLY"
 
-print_header "AWS Bedrock credentials (written to .envrc.local only, never committed)"
-ask_secret_with_default "AWS Bearer Token (Enter to skip)" "$(read_envrc_var AWS_BEARER_TOKEN_BEDROCK)"
-AWS_BEARER_TOKEN_BEDROCK="$REPLY"
-EXISTING_AWS_REGION="$(read_envrc_var AWS_REGION)"
-ask "AWS Region" "${EXISTING_AWS_REGION:-us-east-1}"
-AWS_REGION="$REPLY"
-if [[ -z "$AWS_BEARER_TOKEN_BEDROCK" ]]; then
-  print_warn "No Bedrock token. Models won't answer until you re-run 'make setup' with one."
-fi
-
 # ── write .envrc.local ────────────────────────────────────────────────────────
 
 print_header "Writing .envrc.local"
@@ -159,8 +131,6 @@ set_envrc_var LITELLM_MASTER_KEY "$LITELLM_MASTER_KEY"
 set_envrc_var LITELLM_MAX_BUDGET "$LITELLM_MAX_BUDGET"
 set_envrc_var SEARXNG_SECRET "$SEARXNG_SECRET"
 set_envrc_var POSTGRES_PASSWORD "$POSTGRES_PASSWORD"
-set_envrc_var AWS_BEARER_TOKEN_BEDROCK "$AWS_BEARER_TOKEN_BEDROCK"
-set_envrc_var AWS_REGION "$AWS_REGION"
 print_info "Updated $ENVRC_LOCAL. Lines you added yourself are kept."
 
 # ── render generated service config ───────────────────────────────────────────
@@ -222,9 +192,22 @@ else
   print_info "Created data/postgres with database 'litellm'"
 fi
 
+# ── GitHub Copilot sign-in ───────────────────────────────────────────────────
+
+print_header "GitHub Copilot sign-in"
+if [[ -f "$REPO_ROOT/data/github_copilot/access-token" ]]; then
+  print_info "Signed in. To use another GitHub account, delete data/github_copilot and run 'make copilot-login'."
+elif [[ -t 0 ]]; then
+  "$REPO_ROOT/scripts/copilot-login.sh" \
+    || print_warn "Sign-in did not finish. Run 'make copilot-login' before 'make start'."
+else
+  print_warn "Not signed in to GitHub Copilot, and stdin is not a terminal. Run 'make copilot-login' before 'make start'."
+fi
+
 # ── done ─────────────────────────────────────────────────────────────────────
 
 print_header "Setup complete"
 print_info "Start the backend:     make start   (or 'make serve' to watch it in the foreground)"
+print_info "Redo Copilot sign-in:  make copilot-login"
 print_info "Mint a key per agent:  make new-key NAME=<agent> [BUDGET=<usd>]"
 print_info "Agent base URL:        http://${LITELLM_HOST}:4000"

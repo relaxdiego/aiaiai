@@ -6,10 +6,16 @@ set -uo pipefail
 SRC="$(cd "$(dirname "${BASH_SOURCE[0]}")" && git rev-parse --show-toplevel)"
 PORTS="4000 8888 5439"
 FEATURES="setup connection-info gateway-api agent-keys web-search services secret-hygiene"
-MODELS="claude-opus-4-8-bedrock claude-sonnet-4-6-bedrock claude-haiku-4-5-20251001-bedrock kimi-k2.5-bedrock"
+MODELS="claude-fable-5-1 claude-opus-5 claude-sonnet-5 claude-haiku-4-5-20251001"
+COST_FIELDS="input_cost_per_token output_cost_per_token cache_read_input_token_cost cache_creation_input_token_cost"
 # Master key (sk- + 32 hex), minted agent key (sk- + 22 base64url), Bedrock and
-# AWS keys, Postgres URL passwords, the 48-hex Postgres password, 64-hex secrets.
-SECRET_PATTERN='sk-[a-f0-9]{32}|sk-[A-Za-z0-9_-]{22}([^A-Za-z0-9_-]|$)|ABSK[A-Za-z0-9+/]{20,}|AKIA[0-9A-Z]{16}|postgres(ql)?://[^:@/[:space:]]+:[^@/[:space:]$]+@|(^|[^a-f0-9])[a-f0-9]{48}([^a-f0-9]|$)|[a-f0-9]{64}'
+# AWS keys from older history, GitHub tokens, Postgres URL passwords, the 48-hex
+# Postgres password, 64-hex secrets.
+SECRET_PATTERN='sk-[a-f0-9]{32}|sk-[A-Za-z0-9_-]{22}([^A-Za-z0-9_-]|$)|ABSK[A-Za-z0-9+/]{20,}|AKIA[0-9A-Z]{16}|gh[opsur]_[A-Za-z0-9]{36}|postgres(ql)?://[^:@/[:space:]]+:[^@/[:space:]$]+@|(^|[^a-f0-9])[a-f0-9]{48}([^a-f0-9]|$)|[a-f0-9]{64}'
+# The validator has no Copilot account. This key file is valid until 2100, so
+# LiteLLM never runs the device flow, and its dead API base fails any request
+# that would reach Copilot.
+COPILOT_FIXTURE='{"token":"validate-fixture","expires_at":4102444800,"endpoints":{"api":"http://127.0.0.1:9"}}'
 DEVBOX_BIN="$(dirname "$(command -v devbox 2>/dev/null || echo /nonexistent/devbox)")"
 
 die() { printf 'validate: %s\n' "$1" >&2; exit 2; }
@@ -53,6 +59,7 @@ empty()     { [[ ! -s "$1" ]]; }
 status_is() { [[ "$HTTP_STATUS" == "$1" ]]; }
 
 envval() { grep -E "^export $1=" "$REPO/.envrc.local" 2>/dev/null | tail -1 | cut -d= -f2-; }
+copilot_token() { cat "$REPO/data/github_copilot/access-token" 2>/dev/null; }
 
 # Runs make in the copy with a scrubbed environment, so nothing leaks in from
 # direnv or the calling shell. Prisma and npm download their CLI into OUT, not
@@ -74,7 +81,7 @@ json_is() {
 redact() {
   local args=(-e 's|^$||') s
   for s in "$(envval LITELLM_MASTER_KEY)" "$(envval SEARXNG_SECRET)" "$(envval POSTGRES_PASSWORD)" \
-           "$(envval AWS_BEARER_TOKEN_BEDROCK)" $(cat "$REPO/.validate-keys" 2>/dev/null); do
+           "$(copilot_token)" $(cat "$REPO/.validate-keys" 2>/dev/null); do
     [[ -n "$s" ]] && args+=(-e "s|$s|<redacted>|g")
   done
   sed "${args[@]}"
@@ -147,6 +154,15 @@ failed_with_hint() { [[ "$1" -ne 0 ]] && grep -q "$3" "$2"; }
 nonempty_same() { [[ -n "$1" ]] && same "$1" "$2"; }
 # git grep exits 1 on no match and above 1 on error, so an error is never "clean".
 no_match() { [[ "$1" -eq 1 ]] && empty "$2"; }
+skipped_copilot_login() { grep -q 'Not signed in to GitHub Copilot' "$1" && not grep -q 'Please visit' "$1"; }
+# The user's ~/.config/litellm is LiteLLM's default token dir. Fail only if this run created it.
+config_dir_untouched() { grep -qx yes "$OUT/config-litellm-existed" 2>/dev/null || [[ ! -e "$HOME/.config/litellm" ]]; }
+
+# The /model/info entry for every model in MODELS carries every cost field, above zero.
+priced_expr() {
+  printf "all(any(x['model_name'] == m and all((x['model_info'].get(f) or 0) > 0 for f in '%s'.split()) for x in d['data']) for m in '%s'.split())" \
+    "$COST_FIELDS" "$MODELS"
+}
 
 preflight() {
   [[ -x "$DEVBOX_BIN/devbox" ]] || die "devbox is not on PATH"
@@ -164,6 +180,7 @@ cmd_launch() {
   LISTEN="${VALIDATE_LISTEN:-$(default_listen_ip)}"
   [[ -n "$LISTEN" ]] || die "no default-route IPv4 address; set VALIDATE_LISTEN=<ip>"
   CUR=setup; mkdir -p "$EV/$CUR"
+  if [[ -e "$HOME/.config/litellm" ]]; then echo yes; else echo no; fi > "$OUT/config-litellm-existed"
   mkdir -p "$REPO"
   (cd "$SRC" && git ls-files -co --exclude-standard -z | xargs -0 tar cf -) | tar xf - -C "$REPO"
   record setup copy-working-tree PASS "$REPO"
@@ -173,12 +190,13 @@ cmd_launch() {
   check setup start-refused-before-setup "$log" failed_with_hint "$rc" "$log" "make setup"
 
   log="$EV/setup/fresh-setup.txt"
-  printf '%s\n5\n\n\n' "$LISTEN" | mk setup > "$REPO/.setup-out" 2>&1; rc=$?
+  printf '%s\n5\n' "$LISTEN" | mk setup > "$REPO/.setup-out" 2>&1; rc=$?
   redact < "$REPO/.setup-out" > "$log"
   check setup fresh-setup-exits-0 "$log" same "$rc" 0
+  check setup setup-skips-copilot-login-without-tty "$log" skipped_copilot_login "$log"
   grep -oE '^export [A-Z_]+' "$REPO/.envrc.local" > "$EV/setup/envrc-vars.txt" 2>/dev/null
   local var
-  for var in LITELLM_HOST LITELLM_MASTER_KEY LITELLM_MAX_BUDGET SEARXNG_SECRET POSTGRES_PASSWORD AWS_REGION; do
+  for var in LITELLM_HOST LITELLM_MASTER_KEY LITELLM_MAX_BUDGET SEARXNG_SECRET POSTGRES_PASSWORD; do
     check setup "envrc-has-$var" "$EV/setup/envrc-vars.txt" grep -qx "export $var" "$EV/setup/envrc-vars.txt"
   done
   ls -l "$REPO/.envrc.local" | cut -c1-10 > "$EV/setup/envrc-mode.txt"
@@ -187,9 +205,11 @@ cmd_launch() {
   check setup budget-rendered "$REPO/litellm/config.yaml" grep -qE '^\s*max_budget: 5$' "$REPO/litellm/config.yaml"
   check setup postgres-initialized "$REPO/data/postgres/PG_VERSION" test -f "$REPO/data/postgres/PG_VERSION"
 
+  (umask 077 && mkdir -p "$REPO/data/github_copilot" && printf '%s' "$COPILOT_FIXTURE" > "$REPO/data/github_copilot/api-key.json")
   log="$EV/setup/start.txt"
   mk start > "$log" 2>&1; rc=$?
   check setup start-exits-0 "$log" same "$rc" 0
+  check setup start-warns-without-copilot-login "$log" grep -q 'make copilot-login' "$log"
   check setup gateway-ready-within-300s "$log" wait_ready 300
 }
 
@@ -215,11 +235,11 @@ drive_setup() {
   local before after rc log="$EV/setup/rerun-setup.txt"
   fingerprint() {
     printf '%s\n' "$(envval LITELLM_HOST)" "$(envval LITELLM_MASTER_KEY)" "$(envval LITELLM_MAX_BUDGET)" \
-      "$(envval SEARXNG_SECRET)" "$(envval POSTGRES_PASSWORD)" "$(envval AWS_REGION)" | cksum
+      "$(envval SEARXNG_SECRET)" "$(envval POSTGRES_PASSWORD)" | cksum
   }
   before="$(fingerprint)"
   printf 'export VALIDATE_CUSTOM=kept\nexport MACHINE_MODE=full\n' >> "$REPO/.envrc.local"
-  printf '\n\n\n\n' | mk setup > "$REPO/.setup-out" 2>&1; rc=$?
+  printf '\n\n' | mk setup > "$REPO/.setup-out" 2>&1; rc=$?
   redact < "$REPO/.setup-out" > "$log"
   after="$(fingerprint)"
   check setup rerun-exits-0 "$log" same "$rc" 0
@@ -239,7 +259,7 @@ drive_connection-info() {
     nonempty_same "$(cat "$REPO/.show-key")" "$(envval LITELLM_MASTER_KEY)"
 }
 
-chat_body() { printf '{"model":"claude-sonnet-4-6-bedrock","messages":[{"role":"user","content":"ping"}],"mock_response":"pong"}'; }
+chat_body() { printf '{"model":"claude-sonnet-5","messages":[{"role":"user","content":"ping"}],"mock_response":"pong"}'; }
 
 # remember_key KEY EVIDENCE: adds KEY to the redaction list, then re-redacts the
 # evidence file that was written before the key was known.
@@ -259,6 +279,8 @@ drive_gateway-api() {
   for m in $MODELS; do
     check gateway-api "lists-$m" "$EV/gateway-api/models.txt" json_is "'$m' in [x['id'] for x in d['data']]" True
   done
+  http model-info GET /model/info "$master"
+  check gateway-api model-info-has-copilot-pricing "$EV/gateway-api/model-info.txt" json_is "$(priced_expr)" True
   # LiteLLM honors a client's mock_response only for keys whose metadata allows it.
   # Aliases must be unique, so each drive mints a fresh one.
   http mock-key POST /key/generate "$master" \
@@ -269,7 +291,7 @@ drive_gateway-api() {
   http openai-chat POST /v1/chat/completions "$mock" "$(chat_body)"
   check gateway-api openai-chat-completions "$EV/gateway-api/openai-chat.txt" json_is 'd["choices"][0]["message"]["content"]' pong
   http anthropic-messages POST /v1/messages "$mock" \
-    '{"model":"claude-sonnet-4-6-bedrock","max_tokens":16,"messages":[{"role":"user","content":"ping"}],"mock_response":"pong"}'
+    '{"model":"claude-sonnet-5","max_tokens":16,"messages":[{"role":"user","content":"ping"}],"mock_response":"pong"}'
   check gateway-api anthropic-messages "$EV/gateway-api/anthropic-messages.txt" json_is 'd["content"][0]["text"]' pong
 }
 
@@ -304,7 +326,15 @@ drive_web-search() {
   http search POST /v1/search/local-search "$(agent_key)" '{"query":"Linux kernel","max_results":3}'
   check web-search search-endpoint-200 "$EV/web-search/search.txt" status_is 200
   check web-search search-returns-results "$EV/web-search/search.txt" json_is 'len(d["results"]) > 0' True
-  record web-search websearch-interception SKIP "needs real Bedrock credentials; the callback only runs inside a live bedrock call"
+  # Claude Code's standalone web_search request. A 200 proves LiteLLM answered it
+  # from SearXNG: the fixture's dead Copilot API base fails any upstream call.
+  http interception POST /v1/messages "$(agent_key)" \
+    '{"model":"claude-sonnet-5","max_tokens":256,"tools":[{"type":"web_search_20250305","name":"web_search","max_uses":1}],"messages":[{"role":"user","content":"Linux kernel"}]}'
+  check web-search interception-200 "$EV/web-search/interception.txt" status_is 200
+  check web-search websearch-interception "$EV/web-search/interception.txt" \
+    json_is "d['content'][0]['type'] == 'text' and 'URL: http' in d['content'][0]['text'] and d['usage']['output_tokens'] == 0" True
+  check web-search no-device-flow-in-server-log "$REPO/logs/process-compose.log" \
+    not grep -q 'Please visit' "$REPO/logs/process-compose.log"
 }
 
 drive_services() {
@@ -330,7 +360,8 @@ drive_services() {
 
 drive_secret-hygiene() {
   local path hits="$EV/secret-hygiene"
-  for path in .envrc.local litellm/config.yaml searxng/settings.yml data/postgres/PG_VERSION logs/process-compose.log; do
+  for path in .envrc.local litellm/config.yaml searxng/settings.yml data/postgres/PG_VERSION \
+              data/github_copilot/access-token logs/process-compose.log; do
     check secret-hygiene "gitignored-$path" "$SRC/.gitignore" git -C "$SRC" check-ignore -q "$path"
   done
   local excludes=(-- . ':!requirements.txt' ':!devbox.lock') rc
@@ -340,11 +371,13 @@ drive_secret-hygiene() {
   local st=("${PIPESTATUS[@]}")
   [[ "${st[0]}" -eq 0 ]] || st[1]=2
   check secret-hygiene no-secret-patterns-in-history "$hits/history-hits.txt" no_match "${st[1]}" "$hits/history-hits.txt"
+  ls -ld "$HOME/.config/litellm" > "$hits/config-litellm.txt" 2>&1
+  check secret-hygiene copilot-token-dir-in-repo "$hits/config-litellm.txt" config_dir_untouched
   local s
   collect_logs
   : > "$hits/evidence-leaks.txt"
   for s in "$(envval LITELLM_MASTER_KEY)" "$(envval SEARXNG_SECRET)" "$(envval POSTGRES_PASSWORD)" \
-           "$(envval AWS_BEARER_TOKEN_BEDROCK)" $(cat "$REPO/.validate-keys" 2>/dev/null); do
+           "$(copilot_token)" $(cat "$REPO/.validate-keys" 2>/dev/null); do
     [[ -n "$s" ]] && grep -rlF "$s" "$EV" >> "$hits/evidence-leaks.txt"
   done
   check secret-hygiene evidence-is-redacted "$hits/evidence-leaks.txt" empty "$hits/evidence-leaks.txt"

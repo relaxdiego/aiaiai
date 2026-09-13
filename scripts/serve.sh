@@ -13,6 +13,14 @@ command -v devbox >/dev/null 2>&1 || fail "devbox is not installed."
 [[ -f searxng/settings.yml ]] || fail "searxng/settings.yml not found. Run 'make setup' first."
 [[ -f data/postgres/PG_VERSION ]] || fail "data/postgres is not initialized. Run 'make setup' first."
 
+# Without a token, LiteLLM runs the device flow inside the server for every
+# model while it loads the config, and drops each model it cannot sign in.
+if [[ ! -f data/github_copilot/access-token ]]; then
+  printf "Warning: GitHub Copilot is not signed in, so models will not load. Run 'make copilot-login', then 'make stop' and 'make start'.\n" >&2
+fi
+# The server rewrites the Copilot key file here; keep the directory private.
+(umask 077 && mkdir -p data/github_copilot)
+
 eval "$(devbox shellenv)"
 # shellcheck disable=SC1091
 . ./.envrc.local

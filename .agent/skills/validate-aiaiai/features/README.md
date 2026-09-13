@@ -38,8 +38,8 @@ Each feature file starts with an H1 title and one paragraph describing the user-
 
 - [Setup wizard](./setup.md) (`setup`) covers first run, re-run, and the refusal to start before setup.
 - [Connection info](./connection-info.md) (`connection-info`) covers the base URL and master key the user hands to agents.
-- [Gateway API](./gateway-api.md) (`gateway-api`) covers auth, model listing, and the OpenAI and Anthropic chat formats.
+- [Gateway API](./gateway-api.md) (`gateway-api`) covers auth, model listing, per-model pricing, and the OpenAI and Anthropic chat formats.
 - [Per-agent keys](./agent-keys.md) (`agent-keys`) covers minting a virtual key with an alias and budget.
-- [Web search](./web-search.md) (`web-search`) covers the search endpoint backed by SearXNG.
+- [Web search](./web-search.md) (`web-search`) covers the search endpoint backed by SearXNG and the interception of Claude Code's `web_search` request.
 - [Services](./services.md) (`services`) covers binding, stop, restart, and persistence.
-- [Secret hygiene](./secret-hygiene.md) (`secret-hygiene`) covers ignored files, pattern scans, and redacted evidence.
+- [Secret hygiene](./secret-hygiene.md) (`secret-hygiene`) covers ignored files, pattern scans, the in-repo Copilot token directory, and redacted evidence.

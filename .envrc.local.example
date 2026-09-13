@@ -17,7 +17,3 @@ export SEARXNG_SECRET=CHANGEME
 # Password for the bundled Postgres in data/postgres. Generated once; the
 # database is created with it, so changing it here alone breaks LiteLLM.
 export POSTGRES_PASSWORD=CHANGEME
-
-# AWS Bedrock credentials referenced in litellm/config.yaml.
-export AWS_BEARER_TOKEN_BEDROCK=CHANGEME
-export AWS_REGION=us-east-1

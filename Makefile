@@ -1,4 +1,4 @@
-.PHONY: setup serve start stop status new-key show-key show-base-url
+.PHONY: setup copilot-login serve start stop status new-key show-key show-base-url
 
 # The process-compose control socket. Every target that talks to the running
 # services finds it through this variable.
@@ -9,6 +9,9 @@ REQUIRE_ENVRC = test -f .envrc.local || { echo "Error: .envrc.local not found. R
 
 setup:
 	@bash scripts/setup.sh
+
+copilot-login:
+	@scripts/copilot-login.sh
 
 serve:
 	@scripts/serve.sh
