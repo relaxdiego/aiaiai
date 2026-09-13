@@ -53,6 +53,12 @@ processes:
     environment:
       - "DATABASE_URL=postgresql://litellm:${POSTGRES_PASSWORD}@127.0.0.1:5439/litellm"
       - "SEARXNG_API_BASE=http://127.0.0.1:8888"
+      # Keep LiteLLM on the data bundled in the pinned wheel instead of
+      # fetching it from GitHub main at runtime.
+      - "LITELLM_LOCAL_MODEL_COST_MAP=True"
+      - "LITELLM_LOCAL_ANTHROPIC_BETA_HEADERS=True"
+      - "LITELLM_LOCAL_BLOG_POSTS=True"
+      - "LITELLM_LOCAL_POLICY_TEMPLATES=true"
     depends_on:
       postgres:
         condition: process_healthy

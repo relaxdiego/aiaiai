@@ -37,7 +37,9 @@ Run the `validate-aiaiai` skill after any change to the files above. It is the d
 
 **No direnv dependency at runtime.** `scripts/serve.sh` loads devbox and `.envrc.local` itself, so `make start` works from a plain shell, a login script, or a service manager.
 
-**Generated config from committed templates.** Edit `*.example`, re-run `make setup`. `max_budget` is rendered as a literal because LiteLLM before v1.90.0 does not coerce an env-sourced `max_budget` to a number (BerriAI/litellm#23843). We pin 1.89.2.
+**Generated config from committed templates.** Edit `*.example`, re-run `make setup`. `max_budget` is rendered as a literal. LiteLLM before v1.90.0 did not coerce an env-sourced `max_budget` to a number (BerriAI/litellm#23843). The pinned version does, but the literal keeps the rendered config readable on its own.
+
+**Pinned runtime.** `requirements.in` pins `litellm[proxy]==1.100.1`. `requirements.txt` locks every transitive dependency by hash and is compiled with `--exclude-newer` at the release date, so nothing uploaded later can slip in. LiteLLM also fetches its model cost map, Anthropic beta headers, blog posts, and policy templates from GitHub `main` at runtime. `process-compose.yaml` sets `LITELLM_LOCAL_MODEL_COST_MAP`, `LITELLM_LOCAL_ANTHROPIC_BETA_HEADERS`, `LITELLM_LOCAL_BLOG_POSTS`, and `LITELLM_LOCAL_POLICY_TEMPLATES` so it uses the copies bundled in the pinned wheel instead.
 
 **Web search.** Bedrock Claude has no native web search. `websearch_interception` runs Claude Code's `web_search` tool against SearXNG. Other clients call `POST /v1/search/local-search`. Both find SearXNG through `SEARXNG_API_BASE`, set in `process-compose.yaml`.
 
@@ -51,5 +53,6 @@ Run the `validate-aiaiai` skill after any change to the files above. It is the d
 - `make setup` stays idempotent and keeps existing secrets and user lines.
 - `make start` and `make serve` fail with a pointer to `make setup` when setup has not run.
 - Scripts stay compatible with macOS's bash 3.2: no `${var,,}`, `mapfile`, or associative arrays.
-- `requirements.txt` is only regenerated from `requirements.in` with uv.
+- `requirements.txt` is only regenerated from `requirements.in` with the uv command in its header, hashes and `--exclude-newer` included.
+- LiteLLM runs with the four `LITELLM_LOCAL_*` variables set, so it never loads runtime data from GitHub.
 - process-compose log rotation stays bounded.

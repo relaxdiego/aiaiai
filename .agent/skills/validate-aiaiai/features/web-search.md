@@ -19,7 +19,7 @@ Preconditions:
 - `agent-keys` passed, so a minted key exists.
 - The machine can reach the public internet.
 
-- **Search endpoint.** `validate.sh drive "$OUT" web-search` sends `{"query":"Linux kernel","max_results":3}` with the agent key. Checks `search-endpoint-200` and `search-returns-results` pass on HTTP 200 with a non-empty `results` list. LiteLLM 1.89.2 ignores `max_results` for SearXNG, so expect about 20 results, not 3.
+- **Search endpoint.** `validate.sh drive "$OUT" web-search` sends `{"query":"Linux kernel","max_results":3}` with the agent key. Checks `search-endpoint-200` and `search-returns-results` pass on HTTP 200 with a non-empty `results` list. LiteLLM ignores `max_results` for SearXNG, so expect every result SearXNG returns (30 in a recent run), not 3.
 - **Interception.** Recorded as `SKIP`. It needs a real Bedrock call, and the validator has no credentials.
 - **Proof.** `evidence/web-search/search.txt`.
 
