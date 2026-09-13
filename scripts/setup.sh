@@ -18,13 +18,6 @@ ask() {
   REPLY="${REPLY:-$default}"
 }
 
-ask_secret() {
-  local prompt="$1"
-  printf '  %s: ' "$prompt"
-  read -rs REPLY
-  printf '\n'
-}
-
 # Show first 6 chars of a secret followed by "..." for verification
 mask_value() {
   local val="$1" n=6
@@ -32,7 +25,7 @@ mask_value() {
   printf '%s...' "${val:0:$n}"
 }
 
-# Like ask_secret but shows a masked hint and keeps existing value on Enter
+# Like ask but hides input, shows a masked hint, and keeps existing value on Enter
 ask_secret_with_default() {
   local prompt="$1" existing="$2"
   local hint=""
@@ -86,110 +79,54 @@ command -v devbox >/dev/null 2>&1 || {
 }
 print_info "devbox found."
 
-# ── mode selection ────────────────────────────────────────────────────────────
-
-print_header "Machine mode"
-printf '  Choose the mode for this machine:\n'
-printf '    1) full   — runs LiteLLM locally AND the clients (Claude Code, pi.dev)\n'
-printf '    2) client — runs only the clients, connecting to a LiteLLM gateway elsewhere\n'
-ask "Mode (1/full or 2/client)" "1"
-
-case "${REPLY,,}" in
-  1|full)   MACHINE_MODE=full   ;;
-  2|client) MACHINE_MODE=client ;;
-  *)
-    print_err "Invalid choice: $REPLY"
-    exit 1
-    ;;
-esac
-print_info "Mode: $MACHINE_MODE"
-
 # ── collect config values ─────────────────────────────────────────────────────
 
 print_header "Gateway configuration"
 
-if [[ "$MACHINE_MODE" == "full" ]]; then
-  GATEWAY_BASE_URL="http://127.0.0.1:4000"
-  print_info "Gateway URL: $GATEWAY_BASE_URL (fixed for full mode)"
-
-  EXISTING_KEY="$(read_envrc_var LITELLM_MASTER_KEY)"
-
-  if [[ -n "$EXISTING_KEY" ]]; then
-    LITELLM_MASTER_KEY="$EXISTING_KEY"
-    print_info "Reusing existing master key from .envrc.local"
-  else
-    LITELLM_MASTER_KEY="sk-$(python3 -c 'import secrets; print(secrets.token_hex(16))')"
-    print_info "Generated new master key."
-  fi
-
-  # SearXNG (local web-search backend) needs a cryptographic secret_key,
-  # supplied at runtime via SEARXNG_SECRET so it stays out of the repo.
-  EXISTING_SEARXNG_SECRET="$(read_envrc_var SEARXNG_SECRET)"
-  if [[ -n "$EXISTING_SEARXNG_SECRET" ]]; then
-    SEARXNG_SECRET="$EXISTING_SEARXNG_SECRET"
-    print_info "Reusing existing SearXNG secret from .envrc.local"
-  else
-    SEARXNG_SECRET="$(python3 -c 'import secrets; print(secrets.token_hex(32))')"
-    print_info "Generated new SearXNG secret."
-  fi
-
-  # Spend cap rendered into the generated litellm/config.yaml as a literal.
-  EXISTING_MAX_BUDGET="$(read_envrc_var LITELLM_MAX_BUDGET)"
-  ask "LiteLLM max budget in USD per 30d" "${EXISTING_MAX_BUDGET:-120}"
-  LITELLM_MAX_BUDGET="$REPLY"
+EXISTING_KEY="$(read_envrc_var LITELLM_MASTER_KEY)"
+if [[ -n "$EXISTING_KEY" ]]; then
+  LITELLM_MASTER_KEY="$EXISTING_KEY"
+  print_info "Reusing existing master key from .envrc.local"
 else
-  EXISTING_GATEWAY_URL="$(read_envrc_var GATEWAY_BASE_URL)"
-  EXISTING_MASTER_KEY="$(read_envrc_var LITELLM_MASTER_KEY)"
-
-  ask "LiteLLM gateway base URL" "$EXISTING_GATEWAY_URL"
-  GATEWAY_BASE_URL="$REPLY"
-  if [[ -z "$GATEWAY_BASE_URL" ]]; then
-    print_err "Gateway URL is required."
-    exit 1
-  fi
-
-  printf '\n'
-  print_info "To find your master key, run 'make show-key' on the gateway machine."
-  printf '\n'
-  ask_secret_with_default "LiteLLM master key" "$EXISTING_MASTER_KEY"
-  LITELLM_MASTER_KEY="$REPLY"
-  if [[ -z "$LITELLM_MASTER_KEY" ]]; then
-    print_err "LiteLLM master key is required."
-    exit 1
-  fi
+  LITELLM_MASTER_KEY="sk-$(python3 -c 'import secrets; print(secrets.token_hex(16))')"
+  print_info "Generated new master key."
 fi
 
-DATABASE_URL=""
-
-if [[ "$MACHINE_MODE" == "full" ]]; then
-  EXISTING_ANTHROPIC_API_KEY="$(read_envrc_var ANTHROPIC_API_KEY)"
-  EXISTING_AWS_BEARER_TOKEN="$(read_envrc_var AWS_BEARER_TOKEN_BEDROCK)"
-  EXISTING_AWS_REGION="$(read_envrc_var AWS_REGION)"
-  EXISTING_DATABASE_URL="$(read_envrc_var DATABASE_URL)"
-
-  print_header "Upstream provider keys (written to .envrc.local only — never committed)"
-  printf '  Press Enter to skip any provider you are not using.\n'
-
-  printf '\n'
-  ask_secret_with_default "Anthropic API key (optional, Enter to skip)" "$EXISTING_ANTHROPIC_API_KEY"
-  ANTHROPIC_API_KEY="$REPLY"
-
-  printf '\n'
-  printf '  AWS Bedrock (press Enter on both to skip)\n'
-  ask_secret_with_default "AWS Bearer Token (optional, Enter to skip)" "$EXISTING_AWS_BEARER_TOKEN"
-  AWS_BEARER_TOKEN_BEDROCK="$REPLY"
-  ask "AWS Region" "${EXISTING_AWS_REGION:-us-east-1}"
-  AWS_REGION="$REPLY"
-
-  if [[ -z "$ANTHROPIC_API_KEY" && -z "$AWS_BEARER_TOKEN_BEDROCK" ]]; then
-    print_warn "No provider credentials entered — models won't be callable until you add them to .envrc.local."
-  fi
-
-  printf '\n'
-  ask_secret_with_default "PostgreSQL database URL (optional, Enter to skip)" "$EXISTING_DATABASE_URL"
-  # Strip GUI-tool query params (e.g. ?statusColor=...&name=...) — keep only the DSN
-  DATABASE_URL="${REPLY%%\?*}"
+# SearXNG (local web-search backend) needs a cryptographic secret_key,
+# supplied at runtime via SEARXNG_SECRET so it stays out of the repo.
+EXISTING_SEARXNG_SECRET="$(read_envrc_var SEARXNG_SECRET)"
+if [[ -n "$EXISTING_SEARXNG_SECRET" ]]; then
+  SEARXNG_SECRET="$EXISTING_SEARXNG_SECRET"
+  print_info "Reusing existing SearXNG secret from .envrc.local"
+else
+  SEARXNG_SECRET="$(python3 -c 'import secrets; print(secrets.token_hex(32))')"
+  print_info "Generated new SearXNG secret."
 fi
+
+# Spend cap rendered into the generated litellm/config.yaml as a literal.
+EXISTING_MAX_BUDGET="$(read_envrc_var LITELLM_MAX_BUDGET)"
+ask "LiteLLM max budget in USD per 30d" "${EXISTING_MAX_BUDGET:-120}"
+LITELLM_MAX_BUDGET="$REPLY"
+
+EXISTING_AWS_BEARER_TOKEN="$(read_envrc_var AWS_BEARER_TOKEN_BEDROCK)"
+EXISTING_AWS_REGION="$(read_envrc_var AWS_REGION)"
+EXISTING_DATABASE_URL="$(read_envrc_var DATABASE_URL)"
+
+print_header "Upstream provider keys (written to .envrc.local only — never committed)"
+printf '  AWS Bedrock (press Enter to skip)\n'
+ask_secret_with_default "AWS Bearer Token (optional, Enter to skip)" "$EXISTING_AWS_BEARER_TOKEN"
+AWS_BEARER_TOKEN_BEDROCK="$REPLY"
+ask "AWS Region" "${EXISTING_AWS_REGION:-us-east-1}"
+AWS_REGION="$REPLY"
+
+if [[ -z "$AWS_BEARER_TOKEN_BEDROCK" ]]; then
+  print_warn "No provider credentials entered — models won't be callable until you add them to .envrc.local."
+fi
+
+printf '\n'
+ask_secret_with_default "PostgreSQL database URL (optional, Enter to skip)" "$EXISTING_DATABASE_URL"
+# Strip GUI-tool query params (e.g. ?statusColor=...&name=...) — keep only the DSN
+DATABASE_URL="${REPLY%%\?*}"
 
 # ── write .envrc.local ────────────────────────────────────────────────────────
 
@@ -205,158 +142,37 @@ fi
 if [[ "$SKIP_ENVRC" -eq 0 ]]; then
   {
     printf '# Generated by scripts/setup.sh — do not commit this file\n'
-    printf 'export MACHINE_MODE=%s\n' "$MACHINE_MODE"
-    printf 'export GATEWAY_BASE_URL=%s\n' "$GATEWAY_BASE_URL"
     printf 'export LITELLM_MASTER_KEY=%s\n' "$LITELLM_MASTER_KEY"
-    if [[ "$MACHINE_MODE" == "full" ]]; then
-      printf 'export LITELLM_MAX_BUDGET=%s\n' "$LITELLM_MAX_BUDGET"
-      printf 'export SEARXNG_SECRET=%s\n' "$SEARXNG_SECRET"
-      # URL the websearch_interception callback uses to reach SearXNG. It reads
-      # this env var directly — NOT the api_base in litellm/config.yaml. Must
-      # match searxng/settings.yml's bind_address:port.
-      printf 'export SEARXNG_API_BASE=%s\n' "${SEARXNG_API_BASE:-http://127.0.0.1:8888}"
-      [[ -n "$ANTHROPIC_API_KEY" ]] && printf 'export ANTHROPIC_API_KEY=%s\n' "$ANTHROPIC_API_KEY"
-      if [[ -n "$AWS_BEARER_TOKEN_BEDROCK" ]]; then
-        printf 'export AWS_BEARER_TOKEN_BEDROCK=%s\n' "$AWS_BEARER_TOKEN_BEDROCK"
-        printf 'export AWS_REGION=%s\n' "$AWS_REGION"
-      fi
-      [[ -n "$DATABASE_URL" ]] && printf 'export DATABASE_URL=%s\n' "$DATABASE_URL"
+    printf 'export LITELLM_MAX_BUDGET=%s\n' "$LITELLM_MAX_BUDGET"
+    printf 'export SEARXNG_SECRET=%s\n' "$SEARXNG_SECRET"
+    # URL the websearch_interception callback uses to reach SearXNG. It reads
+    # this env var directly — NOT the api_base in litellm/config.yaml. Must
+    # match searxng/settings.yml's bind_address:port.
+    printf 'export SEARXNG_API_BASE=%s\n' "${SEARXNG_API_BASE:-http://127.0.0.1:8888}"
+    if [[ -n "$AWS_BEARER_TOKEN_BEDROCK" ]]; then
+      printf 'export AWS_BEARER_TOKEN_BEDROCK=%s\n' "$AWS_BEARER_TOKEN_BEDROCK"
+      printf 'export AWS_REGION=%s\n' "$AWS_REGION"
     fi
+    [[ -n "$DATABASE_URL" ]] && printf 'export DATABASE_URL=%s\n' "$DATABASE_URL"
   } > "$ENVRC_LOCAL"
   print_info "Wrote $ENVRC_LOCAL"
 fi
 
-# ── render generated service config (full mode only) ──────────────────────────
+# ── render generated service config ───────────────────────────────────────────
 # litellm/config.yaml and searxng/settings.yml are git-ignored build artifacts
-# rendered from their committed *.example templates. Client-mode machines run no
-# local services, so they need neither.
+# rendered from their committed *.example templates.
 
-if [[ "$MACHINE_MODE" == "full" ]]; then
-  print_header "Rendering service config"
-  render_config "litellm/config.yaml.example" "litellm/config.yaml" \
-    "s|__LITELLM_MAX_BUDGET__|${LITELLM_MAX_BUDGET}|"
-  render_config "searxng/settings.yml.example" "searxng/settings.yml"
-  print_info "Wrote litellm/config.yaml (max_budget=${LITELLM_MAX_BUDGET}) and searxng/settings.yml"
-fi
-
-# ── configure Claude Code globally (~/.claude/settings.json) ──────────────────
-# direnv only loads .envrc inside this repo. Writing the gateway env into Claude
-# Code's global settings lets it reach LiteLLM from any directory.
-
-print_header "Configuring Claude Code"
-if ! confirm "Auto-configure Claude Code to use the gateway?"; then
-  print_info "Skipping Claude Code configuration."
-else
-CLAUDE_SETTINGS="$HOME/.claude/settings.json"
-mkdir -p "$(dirname "$CLAUDE_SETTINGS")"
-
-# Build the model list from the committed template (the generated config.yaml
-# does not exist in client mode, but the .example is always present).
-LITELLM_MODELS=()
-while IFS= read -r model; do
-  LITELLM_MODELS+=("$model")
-done < <(grep -E '^\s+-\s+model_name:' "$REPO_ROOT/litellm/config.yaml.example" | sed 's/.*model_name:[[:space:]]*//')
-
-# Read the current default model from settings.json (if any)
-EXISTING_MODEL=$(python3 -c "
-import json, os
-try:
-    s = json.load(open(os.path.expanduser('~/.claude/settings.json')))
-    print(s.get('model', ''))
-except:
-    print('')
-" 2>/dev/null)
-
-# Default to the existing model if it's still a valid gateway model, else first in list
-DEFAULT_MODEL="${LITELLM_MODELS[0]:-}"
-for m in "${LITELLM_MODELS[@]}"; do
-  [[ "$m" == "$EXISTING_MODEL" ]] && DEFAULT_MODEL="$m" && break
-done
-
-if [[ ${#LITELLM_MODELS[@]} -gt 0 ]]; then
-  printf '  Available models:\n'
-  for m in "${LITELLM_MODELS[@]}"; do printf '    - %s\n' "$m"; done
-  ask "Default model" "$DEFAULT_MODEL"
-  SELECTED_MODEL="$REPLY"
-else
-  print_warn "No models found in litellm/config.yaml.example; skipping default model selection."
-  SELECTED_MODEL=""
-fi
-
-if CLAUDE_SETTINGS="$CLAUDE_SETTINGS" \
-   ANTHROPIC_BASE_URL="$GATEWAY_BASE_URL" \
-   ANTHROPIC_AUTH_TOKEN="$LITELLM_MASTER_KEY" \
-   SELECTED_MODEL="$SELECTED_MODEL" \
-   python3 - <<'PY'
-import json, os, sys
-
-path = os.environ["CLAUDE_SETTINGS"]
-
-try:
-    with open(path) as f:
-        text = f.read().strip()
-    settings = json.loads(text) if text else {}
-except FileNotFoundError:
-    settings = {}
-except json.JSONDecodeError as e:
-    print(f"{path} is not valid JSON ({e})", file=sys.stderr)
-    sys.exit(1)
-
-if not isinstance(settings, dict):
-    print(f"{path} is not a JSON object", file=sys.stderr)
-    sys.exit(1)
-
-env = settings.setdefault("env", {})
-env["ANTHROPIC_BASE_URL"] = os.environ["ANTHROPIC_BASE_URL"]
-env["ANTHROPIC_AUTH_TOKEN"] = os.environ["ANTHROPIC_AUTH_TOKEN"]
-env["CLAUDE_CODE_ENABLE_GATEWAY_MODEL_DISCOVERY"] = "1"
-
-# Remove stale model-alias overrides; gateway discovery makes them redundant
-# and leftover values produce phantom entries in the /model picker.
-stale_keys = [
-    "ANTHROPIC_DEFAULT_OPUS_MODEL", "ANTHROPIC_DEFAULT_SONNET_MODEL",
-    "ANTHROPIC_DEFAULT_HAIKU_MODEL", "ANTHROPIC_DEFAULT_FABLE_MODEL",
-    "ANTHROPIC_CUSTOM_MODEL_OPTION", "ANTHROPIC_CUSTOM_MODEL_OPTION_NAME",
-    "ANTHROPIC_CUSTOM_MODEL_OPTION_DESCRIPTION",
-]
-for key in stale_keys:
-    env.pop(key, None)
-
-selected = os.environ.get("SELECTED_MODEL", "")
-if selected:
-    settings["model"] = selected
-
-with open(path, "w") as f:
-    json.dump(settings, f, indent=2)
-    f.write("\n")
-PY
-then
-  print_info "Set ANTHROPIC_BASE_URL, ANTHROPIC_AUTH_TOKEN, and CLAUDE_CODE_ENABLE_GATEWAY_MODEL_DISCOVERY in $CLAUDE_SETTINGS"
-  [[ -n "$SELECTED_MODEL" ]] && print_info "Default model: $SELECTED_MODEL"
-  print_info "Claude Code now reaches the gateway from any directory."
-
-  # Remove any stored login credentials. A token left in ~/.claude/.credentials.json
-  # by a prior `/login` can take precedence over the ANTHROPIC_AUTH_TOKEN we just
-  # wrote, silently sending a stale key to the gateway instead of the master key.
-  CLAUDE_CREDS="$HOME/.claude/.credentials.json"
-  if [[ -f "$CLAUDE_CREDS" ]]; then
-    rm -f "$CLAUDE_CREDS"
-    print_warn "Removed $CLAUDE_CREDS so the gateway key in settings.json takes effect."
-  fi
-else
-  print_warn "Could not update $CLAUDE_SETTINGS automatically (existing file is not valid JSON)."
-  print_warn "Add these by hand under the \"env\" key:"
-  print_warn "  \"ANTHROPIC_BASE_URL\": \"$GATEWAY_BASE_URL\""
-  print_warn "  \"ANTHROPIC_AUTH_TOKEN\": \"<your LITELLM_MASTER_KEY>\""
-fi
-fi
+print_header "Rendering service config"
+render_config "litellm/config.yaml.example" "litellm/config.yaml" \
+  "s|__LITELLM_MAX_BUDGET__|${LITELLM_MAX_BUDGET}|"
+render_config "searxng/settings.yml.example" "searxng/settings.yml"
+print_info "Wrote litellm/config.yaml (max_budget=${LITELLM_MAX_BUDGET}) and searxng/settings.yml"
 
 # ── devbox install ────────────────────────────────────────────────────────────
 
 print_header "Installing devbox packages"
 (cd "$REPO_ROOT" && devbox install)
 
-# Source devbox-managed tools (uv, direnv, python) into the current shell
 eval "$(cd "$REPO_ROOT" && devbox shellenv)"
 
 # ── direnv allow ─────────────────────────────────────────────────────────────
@@ -364,43 +180,29 @@ eval "$(cd "$REPO_ROOT" && devbox shellenv)"
 print_header "Enabling direnv"
 (cd "$REPO_ROOT" && direnv allow)
 
-# ── LiteLLM install (full mode only) ─────────────────────────────────────────
+# ── LiteLLM install ──────────────────────────────────────────────────────────
 
-if [[ "$MACHINE_MODE" == "full" ]]; then
-  print_header "Installing LiteLLM into .venv"
-  (
-    cd "$REPO_ROOT"
-    uv venv .venv --quiet
-    uv pip install --python .venv/bin/python --require-hashes -r requirements.txt --quiet
-  )
-  print_info "LiteLLM installed at .venv/bin/litellm"
+print_header "Installing LiteLLM into .venv"
+(
+  cd "$REPO_ROOT"
+  uv venv .venv --quiet
+  uv pip install --python .venv/bin/python --require-hashes -r requirements.txt --quiet
+)
+print_info "LiteLLM installed at .venv/bin/litellm"
 
-  if [[ -n "$DATABASE_URL" ]]; then
-    print_header "Generating Prisma client"
-    LITELLM_SCHEMA="$REPO_ROOT/.venv/lib/python3.12/site-packages/litellm/proxy/schema.prisma"
-    (cd "$REPO_ROOT" && PATH="$REPO_ROOT/.venv/bin:$PATH" .venv/bin/prisma generate --schema "$LITELLM_SCHEMA")
-    print_info "Prisma client generated."
+if [[ -n "$DATABASE_URL" ]]; then
+  print_header "Generating Prisma client"
+  LITELLM_SCHEMA="$REPO_ROOT/.venv/lib/python3.12/site-packages/litellm/proxy/schema.prisma"
+  (cd "$REPO_ROOT" && PATH="$REPO_ROOT/.venv/bin:$PATH" .venv/bin/prisma generate --schema "$LITELLM_SCHEMA")
+  print_info "Prisma client generated."
 
-    print_header "Applying database schema (prisma db push)"
-    (cd "$REPO_ROOT" && DATABASE_URL="$DATABASE_URL" PATH="$REPO_ROOT/.venv/bin:$PATH" .venv/bin/prisma db push --schema "$LITELLM_SCHEMA")
-    print_info "Database schema applied."
-  fi
+  print_header "Applying database schema (prisma db push)"
+  (cd "$REPO_ROOT" && DATABASE_URL="$DATABASE_URL" PATH="$REPO_ROOT/.venv/bin:$PATH" .venv/bin/prisma db push --schema "$LITELLM_SCHEMA")
+  print_info "Database schema applied."
 fi
 
 # ── done ─────────────────────────────────────────────────────────────────────
 
 print_header "Setup complete"
-if [[ "$MACHINE_MODE" == "full" ]]; then
-  print_info "Run 'make serve' to start the LiteLLM gateway."
-else
-  print_info "Clients configured to reach gateway at $GATEWAY_BASE_URL."
-fi
+print_info "Run 'make serve' to start the LiteLLM gateway."
 print_info "Open a new shell in this directory (direnv will load the environment automatically)."
-
-print_header "Connecting pi.dev (optional)"
-print_info "pi.dev auto-discovers the gateway's full model set via an extension."
-print_info "Run these inside pi.dev (on whichever machine/VM runs it):"
-print_info "  pi install npm:pi-provider-litellm"
-print_info "  /login litellm"
-print_info "Base URL: ${GATEWAY_BASE_URL} (from a VM, use a host IP from 'make show-base-url', not 127.0.0.1)"
-print_info "API key:  your LITELLM_MASTER_KEY (run 'make show-key' on the gateway machine)"
