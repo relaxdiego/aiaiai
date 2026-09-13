@@ -27,6 +27,7 @@ model_list:
 
 general_settings:
   master_key: os.environ/LITELLM_MASTER_KEY
+  # Set by process-compose.yaml to the bundled Postgres.
   database_url: os.environ/DATABASE_URL
   store_model_in_db: true
   store_prompts_in_spend_logs: true
@@ -48,14 +49,10 @@ litellm_settings:
       - bedrock                # covers every model above
     search_tool_name: local-search
 
-# SearXNG runs locally (see searxng/settings.yml, started by process-compose).
-# api_base is the gateway-internal URL; no API key — it's a self-hosted backend.
-# NOTE: the websearch_interception callback does NOT read this api_base — it
-# resolves SearXNG from the SEARXNG_API_BASE env var (set in .envrc.local).
-# Both must point at the same URL; the api_base below covers the search_tools
-# code path, SEARXNG_API_BASE covers the interception code path.
+# SearXNG runs locally under process-compose. The searxng provider finds it
+# through SEARXNG_API_BASE, which process-compose.yaml sets. Agents can also call
+# it directly at POST /v1/search/local-search.
 search_tools:
   - search_tool_name: local-search
     litellm_params:
       search_provider: searxng
-      api_base: http://127.0.0.1:8888

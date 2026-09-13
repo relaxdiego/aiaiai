@@ -1,8 +1,8 @@
-# Supervises the two full-mode services: SearXNG (web-search backend) and the
-# LiteLLM gateway. LiteLLM waits for SearXNG to pass its health check before
-# starting, so web_search interception works on the first request.
+# Supervises the backend: Postgres (LiteLLM's key and spend store), SearXNG
+# (web search), and the LiteLLM gateway, which waits for both to be healthy.
 #
-# Started via `make serve`. Stop with Ctrl-C (stops both).
+# Started by `make start` (background) or `make serve` (foreground). Values like
+# ${LITELLM_HOST} come from .envrc.local, which scripts/serve.sh loads.
 version: "0.5"
 
 # All process output is captured to one file with hard-bounded rotation, so logs
@@ -17,8 +17,22 @@ log_configuration:
     compress: true
 
 processes:
+  postgres:
+    command: "postgres -D data/postgres -h 127.0.0.1 -p 5439 -c unix_socket_directories=''"
+    readiness_probe:
+      exec:
+        command: "pg_isready -h 127.0.0.1 -p 5439"
+      initial_delay_seconds: 1
+      period_seconds: 2
+      failure_threshold: 30
+    shutdown:
+      signal: 2
+    availability:
+      restart: on_failure
+      max_restarts: 5
+
   searxng:
-    # Reads settings from SEARXNG_SETTINGS_PATH; secret from $SEARXNG_SECRET (.envrc.local)
+    # Secret comes from $SEARXNG_SECRET, which overrides server.secret_key.
     command: searxng-run
     environment:
       - "SEARXNG_SETTINGS_PATH=searxng/settings.yml"
@@ -35,18 +49,23 @@ processes:
       max_restarts: 5
 
   litellm:
-    command: ".venv/bin/litellm --config litellm/config.yaml"
+    command: ".venv/bin/litellm --config litellm/config.yaml --host ${LITELLM_HOST} --port 4000"
+    environment:
+      - "DATABASE_URL=postgresql://litellm:${POSTGRES_PASSWORD}@127.0.0.1:5439/litellm"
+      - "SEARXNG_API_BASE=http://127.0.0.1:8888"
     depends_on:
+      postgres:
+        condition: process_healthy
       searxng:
         condition: process_healthy
     readiness_probe:
       http_get:
-        host: 127.0.0.1
+        host: ${LITELLM_HOST}
         port: 4000
         path: /health/liveliness
       initial_delay_seconds: 5
       period_seconds: 10
-      failure_threshold: 6
+      failure_threshold: 30
     availability:
       restart: on_failure
       max_restarts: 5

@@ -4,7 +4,8 @@
     "python@3.12",
     "uv@latest",
     "searxng@latest",
-    "process-compose@latest"
+    "process-compose@latest",
+    "postgresql@17"
   ],
   "shell": {
     "init_hook": []

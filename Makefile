@@ -1,23 +1,34 @@
-.PHONY: setup serve show-key show-base-url
+.PHONY: setup serve start stop status new-key show-key show-base-url
+
+# The process-compose control socket. Every target that talks to the running
+# services finds it through this variable.
+export PC_SOCKET_PATH := /tmp/aiaiai-$(shell id -u).sock
+
+DEVBOX_ENV = eval "$$(devbox shellenv)"
+REQUIRE_ENVRC = test -f .envrc.local || { echo "Error: .envrc.local not found. Run 'make setup' first."; exit 1; }
 
 setup:
 	@bash scripts/setup.sh
 
-show-base-url:
-	@echo "Possible base URLs (pick the one reachable from your client):"
-	@ifconfig | awk '/^[^ \t]/{split($$1,a,":");iface=a[1]} /inet / && $$2!~/^127\./{printf "  http://%s:4000\t(%s)\n",$$2,iface}'
-	@echo ""
-	@echo "Tip: from a VM, run 'ip route' on the VM — the default gateway is usually this host."
+serve:
+	@scripts/serve.sh
+
+start:
+	@scripts/serve.sh --detached
+
+stop:
+	@$(DEVBOX_ENV) && process-compose down --use-uds
+
+status:
+	@$(DEVBOX_ENV) && process-compose process list --use-uds --output wide
+
+new-key:
+	@scripts/new-key.sh "$(NAME)" "$(BUDGET)"
 
 show-key:
-	@if [ ! -f .envrc.local ]; then \
-	  echo "Error: .envrc.local not found. Run 'make setup' first."; exit 1; \
-	fi
-	@grep -E '^export LITELLM_MASTER_KEY=' .envrc.local | cut -d= -f2-
+	@$(REQUIRE_ENVRC)
+	@. ./.envrc.local && echo "$$LITELLM_MASTER_KEY"
 
-serve:
-	@test -x .venv/bin/litellm || { echo "Error: LiteLLM not installed. Run 'make setup' first."; exit 1; }
-	@test -f litellm/config.yaml || { echo "Error: litellm/config.yaml not found (generated from litellm/config.yaml.example). Run 'make setup' first."; exit 1; }
-	@test -f searxng/settings.yml || { echo "Error: searxng/settings.yml not found (generated from searxng/settings.yml.example). Run 'make setup' first."; exit 1; }
-	@mkdir -p logs
-	process-compose up --config process-compose.yaml
+show-base-url:
+	@$(REQUIRE_ENVRC)
+	@. ./.envrc.local && echo "http://$$LITELLM_HOST:4000"

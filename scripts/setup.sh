@@ -2,6 +2,9 @@
 set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+ENVRC_LOCAL="$REPO_ROOT/.envrc.local"
+# Written by older versions of this wizard; nothing reads them anymore.
+RETIRED_VARS="MACHINE_MODE GATEWAY_BASE_URL ANTHROPIC_API_KEY DATABASE_URL SEARXNG_API_BASE"
 
 # ── helpers ──────────────────────────────────────────────────────────────────
 
@@ -39,14 +42,37 @@ ask_secret_with_default() {
 # Read a variable's value from .envrc.local (strips quotes)
 read_envrc_var() {
   local var="$1"
-  [[ -f "$REPO_ROOT/.envrc.local" ]] || return 0
-  grep -E "^export ${var}=" "$REPO_ROOT/.envrc.local" | cut -d= -f2- | tr -d "'\"" || true
+  [[ -f "$ENVRC_LOCAL" ]] || return 0
+  grep -E "^export ${var}=" "$ENVRC_LOCAL" | tail -1 | cut -d= -f2- | tr -d "'\"" || true
 }
 
-confirm() {
-  printf '  %s [y/N]: ' "$1"
-  read -r REPLY
-  [[ "${REPLY,,}" == "y" || "${REPLY,,}" == "yes" ]]
+# Set (or, with an empty value, remove) one variable in .envrc.local, leaving
+# every other line as the user left it.
+set_envrc_var() {
+  local var="$1" val="$2" tmp
+  tmp="$(mktemp)"
+  if [[ -f "$ENVRC_LOCAL" ]]; then
+    grep -vE "^export ${var}=" "$ENVRC_LOCAL" > "$tmp" || true
+  else
+    printf '# Written by scripts/setup.sh. Machine-local secrets; never commit.\n' > "$tmp"
+  fi
+  if [[ -n "$val" ]]; then printf 'export %s=%s\n' "$var" "$val" >> "$tmp"; fi
+  chmod 600 "$tmp"
+  mv "$tmp" "$ENVRC_LOCAL"
+}
+
+reuse_or_generate() {
+  local existing
+  existing="$(read_envrc_var "$1")"
+  if [[ -n "$existing" ]]; then printf '%s' "$existing"; else printf '%s%s' "$2" "$(openssl rand -hex "$3")"; fi
+}
+
+list_ipv4() {
+  if command -v ip >/dev/null 2>&1; then
+    ip -4 -o addr show | awk '{sub(/\/.*/, "", $4); printf "      %-16s (%s)\n", $4, $2}'
+  else
+    ifconfig | awk '/^[^ \t]/ {iface = $1; sub(/:$/, "", iface)} /inet / {printf "      %-16s (%s)\n", $2, iface}'
+  fi
 }
 
 # Render a committed <file>.example template into the git-ignored live <file>,
@@ -73,90 +99,69 @@ render_config() {
 # ── prerequisites ─────────────────────────────────────────────────────────────
 
 print_header "Checking prerequisites"
-command -v devbox >/dev/null 2>&1 || {
-  print_err "devbox is not installed. Install it from https://www.jetify.com/devbox/docs/installing_devbox/"
-  exit 1
-}
-print_info "devbox found."
+for tool in devbox openssl; do
+  command -v "$tool" >/dev/null 2>&1 || {
+    print_err "$tool is not installed."
+    [[ "$tool" == devbox ]] && print_err "Install it from https://www.jetify.com/devbox/docs/installing_devbox/"
+    exit 1
+  }
+done
+print_info "devbox and openssl found."
 
 # ── collect config values ─────────────────────────────────────────────────────
 
+print_header "Listen address"
+printf '  LiteLLM listens on one address. Pick the one your coding-agent VM can reach,\n'
+printf '  usually the host side of the VM network. Addresses on this machine:\n'
+list_ipv4
+EXISTING_HOST="$(read_envrc_var LITELLM_HOST)"
+ask "Listen address" "${EXISTING_HOST:-127.0.0.1}"
+LITELLM_HOST="$REPLY"
+if [[ "$LITELLM_HOST" == "0.0.0.0" ]]; then
+  print_warn "0.0.0.0 exposes the gateway on every network this machine joins, guarded only by its keys."
+fi
+
 print_header "Gateway configuration"
+LITELLM_MASTER_KEY="$(reuse_or_generate LITELLM_MASTER_KEY sk- 16)"
+SEARXNG_SECRET="$(reuse_or_generate SEARXNG_SECRET "" 32)"
+POSTGRES_PASSWORD="$(reuse_or_generate POSTGRES_PASSWORD "" 24)"
+print_info "Master key, SearXNG secret, and Postgres password are ready (existing values are kept)."
 
-EXISTING_KEY="$(read_envrc_var LITELLM_MASTER_KEY)"
-if [[ -n "$EXISTING_KEY" ]]; then
-  LITELLM_MASTER_KEY="$EXISTING_KEY"
-  print_info "Reusing existing master key from .envrc.local"
-else
-  LITELLM_MASTER_KEY="sk-$(python3 -c 'import secrets; print(secrets.token_hex(16))')"
-  print_info "Generated new master key."
-fi
-
-# SearXNG (local web-search backend) needs a cryptographic secret_key,
-# supplied at runtime via SEARXNG_SECRET so it stays out of the repo.
-EXISTING_SEARXNG_SECRET="$(read_envrc_var SEARXNG_SECRET)"
-if [[ -n "$EXISTING_SEARXNG_SECRET" ]]; then
-  SEARXNG_SECRET="$EXISTING_SEARXNG_SECRET"
-  print_info "Reusing existing SearXNG secret from .envrc.local"
-else
-  SEARXNG_SECRET="$(python3 -c 'import secrets; print(secrets.token_hex(32))')"
-  print_info "Generated new SearXNG secret."
-fi
-
-# Spend cap rendered into the generated litellm/config.yaml as a literal.
 EXISTING_MAX_BUDGET="$(read_envrc_var LITELLM_MAX_BUDGET)"
-ask "LiteLLM max budget in USD per 30d" "${EXISTING_MAX_BUDGET:-120}"
+while true; do
+  ask "LiteLLM max budget in USD per 30d" "${EXISTING_MAX_BUDGET:-120}"
+  if [[ "$REPLY" =~ ^[0-9]+([.][0-9]+)?$ ]]; then break; fi
+  print_err "Enter a number, like 120 or 57.5."
+done
 LITELLM_MAX_BUDGET="$REPLY"
 
-EXISTING_AWS_BEARER_TOKEN="$(read_envrc_var AWS_BEARER_TOKEN_BEDROCK)"
-EXISTING_AWS_REGION="$(read_envrc_var AWS_REGION)"
-EXISTING_DATABASE_URL="$(read_envrc_var DATABASE_URL)"
-
-print_header "Upstream provider keys (written to .envrc.local only — never committed)"
-printf '  AWS Bedrock (press Enter to skip)\n'
-ask_secret_with_default "AWS Bearer Token (optional, Enter to skip)" "$EXISTING_AWS_BEARER_TOKEN"
+print_header "AWS Bedrock credentials (written to .envrc.local only, never committed)"
+ask_secret_with_default "AWS Bearer Token (Enter to skip)" "$(read_envrc_var AWS_BEARER_TOKEN_BEDROCK)"
 AWS_BEARER_TOKEN_BEDROCK="$REPLY"
+EXISTING_AWS_REGION="$(read_envrc_var AWS_REGION)"
 ask "AWS Region" "${EXISTING_AWS_REGION:-us-east-1}"
 AWS_REGION="$REPLY"
-
 if [[ -z "$AWS_BEARER_TOKEN_BEDROCK" ]]; then
-  print_warn "No provider credentials entered — models won't be callable until you add them to .envrc.local."
+  print_warn "No Bedrock token. Models won't answer until you re-run 'make setup' with one."
 fi
-
-printf '\n'
-ask_secret_with_default "PostgreSQL database URL (optional, Enter to skip)" "$EXISTING_DATABASE_URL"
-# Strip GUI-tool query params (e.g. ?statusColor=...&name=...) — keep only the DSN
-DATABASE_URL="${REPLY%%\?*}"
 
 # ── write .envrc.local ────────────────────────────────────────────────────────
 
 print_header "Writing .envrc.local"
-ENVRC_LOCAL="$REPO_ROOT/.envrc.local"
-SKIP_ENVRC=0
-
-if [[ -f "$ENVRC_LOCAL" ]]; then
-  print_warn ".envrc.local already exists."
-  confirm "Overwrite it?" || SKIP_ENVRC=1
-fi
-
-if [[ "$SKIP_ENVRC" -eq 0 ]]; then
-  {
-    printf '# Generated by scripts/setup.sh — do not commit this file\n'
-    printf 'export LITELLM_MASTER_KEY=%s\n' "$LITELLM_MASTER_KEY"
-    printf 'export LITELLM_MAX_BUDGET=%s\n' "$LITELLM_MAX_BUDGET"
-    printf 'export SEARXNG_SECRET=%s\n' "$SEARXNG_SECRET"
-    # URL the websearch_interception callback uses to reach SearXNG. It reads
-    # this env var directly — NOT the api_base in litellm/config.yaml. Must
-    # match searxng/settings.yml's bind_address:port.
-    printf 'export SEARXNG_API_BASE=%s\n' "${SEARXNG_API_BASE:-http://127.0.0.1:8888}"
-    if [[ -n "$AWS_BEARER_TOKEN_BEDROCK" ]]; then
-      printf 'export AWS_BEARER_TOKEN_BEDROCK=%s\n' "$AWS_BEARER_TOKEN_BEDROCK"
-      printf 'export AWS_REGION=%s\n' "$AWS_REGION"
-    fi
-    [[ -n "$DATABASE_URL" ]] && printf 'export DATABASE_URL=%s\n' "$DATABASE_URL"
-  } > "$ENVRC_LOCAL"
-  print_info "Wrote $ENVRC_LOCAL"
-fi
+for var in $RETIRED_VARS; do
+  if [[ -n "$(read_envrc_var "$var")" ]]; then
+    set_envrc_var "$var" ""
+    print_warn "Removed $var, which is no longer used."
+  fi
+done
+set_envrc_var LITELLM_HOST "$LITELLM_HOST"
+set_envrc_var LITELLM_MASTER_KEY "$LITELLM_MASTER_KEY"
+set_envrc_var LITELLM_MAX_BUDGET "$LITELLM_MAX_BUDGET"
+set_envrc_var SEARXNG_SECRET "$SEARXNG_SECRET"
+set_envrc_var POSTGRES_PASSWORD "$POSTGRES_PASSWORD"
+set_envrc_var AWS_BEARER_TOKEN_BEDROCK "$AWS_BEARER_TOKEN_BEDROCK"
+set_envrc_var AWS_REGION "$AWS_REGION"
+print_info "Updated $ENVRC_LOCAL. Lines you added yourself are kept."
 
 # ── render generated service config ───────────────────────────────────────────
 # litellm/config.yaml and searxng/settings.yml are git-ignored build artifacts
@@ -172,37 +177,54 @@ print_info "Wrote litellm/config.yaml (max_budget=${LITELLM_MAX_BUDGET}) and sea
 
 print_header "Installing devbox packages"
 (cd "$REPO_ROOT" && devbox install)
-
 eval "$(cd "$REPO_ROOT" && devbox shellenv)"
 
-# ── direnv allow ─────────────────────────────────────────────────────────────
-
-print_header "Enabling direnv"
-(cd "$REPO_ROOT" && direnv allow)
+if command -v direnv >/dev/null 2>&1; then
+  (cd "$REPO_ROOT" && direnv allow)
+fi
 
 # ── LiteLLM install ──────────────────────────────────────────────────────────
 
 print_header "Installing LiteLLM into .venv"
 (
   cd "$REPO_ROOT"
-  uv venv .venv --quiet
+  uv venv .venv --quiet --allow-existing
   uv pip install --python .venv/bin/python --require-hashes -r requirements.txt --quiet
 )
 print_info "LiteLLM installed at .venv/bin/litellm"
 
-if [[ -n "$DATABASE_URL" ]]; then
-  print_header "Generating Prisma client"
-  LITELLM_SCHEMA="$REPO_ROOT/.venv/lib/python3.12/site-packages/litellm/proxy/schema.prisma"
-  (cd "$REPO_ROOT" && PATH="$REPO_ROOT/.venv/bin:$PATH" .venv/bin/prisma generate --schema "$LITELLM_SCHEMA")
-  print_info "Prisma client generated."
+# LiteLLM applies its database migrations on start but expects the Prisma
+# client to be generated already.
+print_header "Generating Prisma client"
+LITELLM_SCHEMA="$(ls "$REPO_ROOT"/.venv/lib/python*/site-packages/litellm/proxy/schema.prisma)"
+(cd "$REPO_ROOT" && PATH="$REPO_ROOT/.venv/bin:$PATH" .venv/bin/prisma generate --schema "$LITELLM_SCHEMA" > /dev/null)
+print_info "Prisma client generated."
 
-  print_header "Applying database schema (prisma db push)"
-  (cd "$REPO_ROOT" && DATABASE_URL="$DATABASE_URL" PATH="$REPO_ROOT/.venv/bin:$PATH" .venv/bin/prisma db push --schema "$LITELLM_SCHEMA")
-  print_info "Database schema applied."
+# ── Postgres ─────────────────────────────────────────────────────────────────
+# LiteLLM needs a database to mint per-agent keys and track spend.
+
+print_header "Initializing Postgres"
+PGDATA_DIR="$REPO_ROOT/data/postgres"
+if [[ -f "$PGDATA_DIR/PG_VERSION" ]]; then
+  print_info "Reusing existing database in data/postgres"
+else
+  mkdir -p "$REPO_ROOT/data"
+  PWFILE="$(mktemp)"
+  printf '%s\n' "$POSTGRES_PASSWORD" > "$PWFILE"
+  initdb -D "$PGDATA_DIR" -U litellm -A scram-sha-256 -E UTF8 --no-locale --pwfile="$PWFILE" > /dev/null
+  rm -f "$PWFILE"
+  # Single-user mode logs every checkpoint to stderr; show it only on failure.
+  if ! PG_OUT="$(printf 'CREATE DATABASE litellm;\n' | postgres --single -D "$PGDATA_DIR" postgres 2>&1)"; then
+    printf '%s\n' "$PG_OUT" >&2
+    print_err "Could not create the litellm database."
+    exit 1
+  fi
+  print_info "Created data/postgres with database 'litellm'"
 fi
 
 # ── done ─────────────────────────────────────────────────────────────────────
 
 print_header "Setup complete"
-print_info "Run 'make serve' to start the LiteLLM gateway."
-print_info "Open a new shell in this directory (direnv will load the environment automatically)."
+print_info "Start the backend:     make start   (or 'make serve' to watch it in the foreground)"
+print_info "Mint a key per agent:  make new-key NAME=<agent> [BUDGET=<usd>]"
+print_info "Agent base URL:        http://${LITELLM_HOST}:4000"
