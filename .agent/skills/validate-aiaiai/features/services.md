@@ -19,8 +19,8 @@ Preconditions:
 
 - `agent-keys` passed, so a minted key exists.
 
-- **Status and binding.** `validate.sh doctor "$OUT"` covers `postgres-running`, `searxng-running`, `litellm-running`, `litellm-bound-to-listen-address`, `searxng-loopback-only`, and `postgres-loopback-only`.
-- **Loopback closed.** `validate.sh drive "$OUT" services` connects to `127.0.0.1:4000` when the listen address is not loopback. Check `loopback-not-listening` passes when the connection fails.
+- **Status and binding.** `validate.sh doctor "$OUT"` covers `postgres-running`, `searxng-running`, `litellm-running`, `liveliness-200`, `db-connected`, `litellm-bound-to-listen-address`, `searxng-loopback-only`, and `postgres-loopback-only`. Each binding check passes only when that address is the sole listener on its port, so an extra `0.0.0.0` or IPv6 listener fails it.
+- **Loopback closed.** `validate.sh drive "$OUT" services` connects to `127.0.0.1:4000` when the listen address is neither `127.0.0.1` nor `0.0.0.0`. Check `loopback-not-listening` passes when the connection fails with HTTP 000, recorded in `evidence/services/loopback.txt`.
 - **Stop.** It runs `make stop`. Checks `stop-exits-0` and `ports-freed-after-stop` pass.
 - **Restart.** It runs `make start`. Checks `restart-exits-0` and `ready-after-restart` pass.
 - **Persistence.** It sends `GET /v1/models` with the key minted before the restart. Check `agent-key-survives-restart` passes on HTTP 200.
@@ -29,5 +29,5 @@ Preconditions:
 ## Gotchas
 
 - `make serve` holds the terminal with a TUI. Automation uses `make start`.
-- The control socket is `/tmp/aiaiai-<uid>.sock`. `make stop` in any clone stops whichever instance owns it.
+- The control socket is `/tmp/aiaiai-<uid>.sock`. `make stop` in any clone stops whichever instance owns it. The Makefile sets that path, so `scripts/serve.sh` run directly uses process-compose's default socket, and `make stop` and `make status` cannot see it.
 - LiteLLM's first start runs Prisma migrations and can take minutes. Wait on liveliness, not a fixed sleep.

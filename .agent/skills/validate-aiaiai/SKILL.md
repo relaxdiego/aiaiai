@@ -27,7 +27,7 @@ $V drive "$OUT" gateway-api      # any feature ID from features/README.md
 $V cleanup "$OUT"
 ```
 
-Launch copies tracked and untracked-but-not-ignored files, so uncommitted edits are what gets validated. It answers the setup wizard on stdin with the machine's default-route IPv4 as the listen address (override with `VALIDATE_LISTEN=<ip>`) and a budget of 5. Ready means `GET http://<listen>:4000/health/liveliness` returns 200. First launch on a machine can take several minutes because devbox, uv, and Prisma download packages.
+Launch copies tracked and untracked-but-not-ignored files, so uncommitted edits are what gets validated. It answers the setup wizard on stdin with the machine's default-route IPv4 as the listen address (override with `VALIDATE_LISTEN=<ip>`, required on a host with no default route) and a budget of 5. `gateway-api` and `agent-keys` can be driven again on the same instance; each drive mints a new key with a timestamped alias. Ready means `GET http://<listen>:4000/health/liveliness` returns 200. First launch on a machine can take several minutes because devbox, uv, and Prisma download packages.
 
 Every `make` call runs under `env -i` with only `HOME`, `USER`, `TERM`, and a PATH holding devbox. That proves the targets work without direnv.
 
@@ -42,14 +42,14 @@ Ports 4000, 8888, and 5439 and the process-compose socket `/tmp/aiaiai-<uid>.soc
 ## Evidence
 
 - `$OUT/report.tsv` has one row per check with `PASS`, `FAIL`, or `SKIP` and the evidence path.
-- `$OUT/evidence/<feature>/` holds request, status, and body for each HTTP call, plus make output. Every file is passed through a redactor that replaces the master key, SearXNG secret, Postgres password, Bedrock token, and minted agent keys with `<redacted>`. The `secret-hygiene` feature fails if any of those values leaked into evidence.
+- `$OUT/evidence/<feature>/` holds request, status, and body for each HTTP call, plus make output. `$OUT/evidence/logs/` holds the process-compose logs. Every file is passed through a redactor that replaces the master key, SearXNG secret, Postgres password, Bedrock token, and minted agent keys with `<redacted>`. The `secret-hygiene` feature fails if any of those values leaked into evidence, logs included. Cleanup refreshes the logs after that scan, so only log lines from the final stop go unscanned.
 - A `SKIP` names why the path could not be driven. Do not report a skipped path as verified.
 
 Real model calls need Bedrock credentials the validator never has. Chat checks send `"mock_response": "pong"`, which exercises auth, routing, and the OpenAI and Anthropic request formats inside LiteLLM without calling Bedrock.
 
 ## Cleanup
 
-`validate.sh cleanup "$OUT"` runs `make stop` in the copy, waits for the ports to free, and deletes `$OUT/repo`, which includes its Postgres data and secrets. `$OUT/evidence` and `$OUT/report.tsv` stay. `run` cleans up on exit, including after failures. After a crash, run cleanup by hand before the next launch.
+`validate.sh cleanup "$OUT"` runs `make stop` in the copy, waits for the ports to free, revokes the `direnv allow` grant that setup gave the copy, and deletes `$OUT/repo`, which includes its Postgres data and secrets. It also deletes `$OUT/cache`, about 300 MB of Prisma and npm downloads. `$OUT/evidence` and `$OUT/report.tsv` stay. `run` cleans up on exit, including after failures. After a crash, run cleanup by hand before the next launch.
 
 ## Maintaining the map
 

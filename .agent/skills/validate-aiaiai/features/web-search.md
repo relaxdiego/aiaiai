@@ -19,11 +19,12 @@ Preconditions:
 - `agent-keys` passed, so a minted key exists.
 - The machine can reach the public internet.
 
-- **Search endpoint.** `validate.sh drive "$OUT" web-search` sends `{"query":"Linux kernel","max_results":3}` with the agent key. Checks `search-endpoint-200` and `search-returns-results` pass on HTTP 200 with a non-empty `results` list.
+- **Search endpoint.** `validate.sh drive "$OUT" web-search` sends `{"query":"Linux kernel","max_results":3}` with the agent key. Checks `search-endpoint-200` and `search-returns-results` pass on HTTP 200 with a non-empty `results` list. LiteLLM 1.89.2 ignores `max_results` for SearXNG, so expect about 20 results, not 3.
 - **Interception.** Recorded as `SKIP`. It needs a real Bedrock call, and the validator has no credentials.
 - **Proof.** `evidence/web-search/search.txt`.
 
 ## Gotchas
 
-- Upstream engines rate-limit by IP. Brave, DuckDuckGo, Qwant, and Startpage often answer a self-hosted instance with CAPTCHAs or 429s, which is why the template enables Bing. An empty result list means every enabled engine was throttled. The redacted SearXNG log is in `evidence/logs/process-compose.log`.
+- Upstream engines rate-limit by IP. The template disables Google and Startpage, which serve CAPTCHAs to self-hosted instances, and enables Bing because Brave and DuckDuckGo often throttle. An empty result list usually means every enabled engine was throttled, but a SearXNG misconfiguration looks the same. Read the SearXNG log before blaming throttling.
+- The redacted log reaches `evidence/logs/process-compose.log` only when `secret-hygiene` or cleanup runs. Before that, read `$OUT/repo/logs/process-compose.log`.
 - Only LiteLLM needs SearXNG. Do not expose port 8888 to the VM.

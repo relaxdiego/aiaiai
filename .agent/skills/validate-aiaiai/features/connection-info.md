@@ -19,10 +19,11 @@ Preconditions:
 - Launch passed.
 
 - **Base URL.** `validate.sh drive "$OUT" connection-info` runs `make show-base-url`. Check `show-base-url` passes when the only line is `http://<listen-ip>:4000`.
-- **Master key.** It runs `make show-key`. Check `show-key-matches-master-key` passes when the output equals `LITELLM_MASTER_KEY`.
+- **Master key.** It runs `make show-key`. Check `show-key-matches-master-key` passes when the output is non-empty and equals `LITELLM_MASTER_KEY`.
 - **Proof.** `evidence/connection-info/show-base-url.txt` and `show-key.txt`, with the key redacted.
 
 ## Gotchas
 
-- Both targets read `.envrc.local` only. They work while the services are stopped.
+- Both targets source `.envrc.local` over the calling shell's environment, so they work while the services are stopped. A variable missing from the file falls back to the shell's value, which the harness's scrubbed environment cannot show.
+- With listen address `0.0.0.0`, `make show-base-url` prints `http://0.0.0.0:4000`, which a VM cannot reach. Give agents the workstation's real address instead.
 - Give agents a key from `make new-key` rather than the master key. The master key can mint and delete keys.

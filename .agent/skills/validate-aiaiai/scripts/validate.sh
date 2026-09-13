@@ -7,7 +7,9 @@ SRC="$(cd "$(dirname "${BASH_SOURCE[0]}")" && git rev-parse --show-toplevel)"
 PORTS="4000 8888 5439"
 FEATURES="setup connection-info gateway-api agent-keys web-search services secret-hygiene"
 MODELS="claude-opus-4-8-bedrock claude-sonnet-4-6-bedrock claude-haiku-4-5-20251001-bedrock kimi-k2.5-bedrock"
-SECRET_PATTERN='sk-[a-f0-9]{32}|ABSK[A-Za-z0-9+/]{20,}|AKIA[0-9A-Z]{16}|postgres(ql)?://[^:@/[:space:]]+:[^@/[:space:]$]+@|[a-f0-9]{64}'
+# Master key (sk- + 32 hex), minted agent key (sk- + 22 base64url), Bedrock and
+# AWS keys, Postgres URL passwords, the 48-hex Postgres password, 64-hex secrets.
+SECRET_PATTERN='sk-[a-f0-9]{32}|sk-[A-Za-z0-9_-]{22}([^A-Za-z0-9_-]|$)|ABSK[A-Za-z0-9+/]{20,}|AKIA[0-9A-Z]{16}|postgres(ql)?://[^:@/[:space:]]+:[^@/[:space:]$]+@|(^|[^a-f0-9])[a-f0-9]{48}([^a-f0-9]|$)|[a-f0-9]{64}'
 DEVBOX_BIN="$(dirname "$(command -v devbox 2>/dev/null || echo /nonexistent/devbox)")"
 
 die() { printf 'validate: %s\n' "$1" >&2; exit 2; }
@@ -118,7 +120,8 @@ listeners() {
 }
 
 port_busy() { listeners | grep -qE "[:.]$1\$"; }
-listening_on() { listeners | grep -qxF "$1"; }
+# only_listening_on ADDR PORT: ADDR:PORT is the one and only listener on PORT.
+only_listening_on() { same "$(listeners | grep -E "[:.]$2\$" | sort -u)" "$1:$2"; }
 
 wait_ready() {
   local waited=0
@@ -140,7 +143,10 @@ wait_ports_free() {
   return 1
 }
 
-failed_with_hint() { [[ "$1" -ne 0 ]] && grep -q "make setup" "$2"; }
+failed_with_hint() { [[ "$1" -ne 0 ]] && grep -q "$3" "$2"; }
+nonempty_same() { [[ -n "$1" ]] && same "$1" "$2"; }
+# git grep exits 1 on no match and above 1 on error, so an error is never "clean".
+no_match() { [[ "$1" -eq 1 ]] && empty "$2"; }
 
 preflight() {
   [[ -x "$DEVBOX_BIN/devbox" ]] || die "devbox is not on PATH"
@@ -155,6 +161,8 @@ preflight() {
 cmd_launch() {
   init_out "$1"
   preflight
+  LISTEN="${VALIDATE_LISTEN:-$(default_listen_ip)}"
+  [[ -n "$LISTEN" ]] || die "no default-route IPv4 address; set VALIDATE_LISTEN=<ip>"
   CUR=setup; mkdir -p "$EV/$CUR"
   mkdir -p "$REPO"
   (cd "$SRC" && git ls-files -co --exclude-standard -z | xargs -0 tar cf -) | tar xf - -C "$REPO"
@@ -162,9 +170,8 @@ cmd_launch() {
 
   local rc log="$EV/setup/start-before-setup.txt"
   mk start > "$log" 2>&1; rc=$?
-  check setup start-refused-before-setup "$log" failed_with_hint "$rc" "$log"
+  check setup start-refused-before-setup "$log" failed_with_hint "$rc" "$log" "make setup"
 
-  LISTEN="${VALIDATE_LISTEN:-$(default_listen_ip)}"
   log="$EV/setup/fresh-setup.txt"
   printf '%s\n5\n\n\n' "$LISTEN" | mk setup > "$REPO/.setup-out" 2>&1; rc=$?
   redact < "$REPO/.setup-out" > "$log"
@@ -176,7 +183,7 @@ cmd_launch() {
   done
   ls -l "$REPO/.envrc.local" | cut -c1-10 > "$EV/setup/envrc-mode.txt"
   check setup envrc-mode-600 "$EV/setup/envrc-mode.txt" grep -qx -- '-rw-------' "$EV/setup/envrc-mode.txt"
-  check setup listen-address-saved "$EV/setup/fresh-setup.txt" same "$(host)" "$LISTEN"
+  check setup listen-address-saved "$EV/setup/envrc-vars.txt" same "$(host)" "$LISTEN"
   check setup budget-rendered "$REPO/litellm/config.yaml" grep -qE '^\s*max_budget: 5$' "$REPO/litellm/config.yaml"
   check setup postgres-initialized "$REPO/data/postgres/PG_VERSION" test -f "$REPO/data/postgres/PG_VERSION"
 
@@ -199,16 +206,16 @@ cmd_doctor() {
   http readiness GET /health/readiness ""
   check doctor db-connected "$EV/doctor/readiness.txt" json_is 'd["db"]' connected
   listeners > "$EV/doctor/listeners.txt"
-  check doctor litellm-bound-to-listen-address "$EV/doctor/listeners.txt" listening_on "$(host):4000"
-  check doctor searxng-loopback-only "$EV/doctor/listeners.txt" listening_on "127.0.0.1:8888"
-  check doctor postgres-loopback-only "$EV/doctor/listeners.txt" listening_on "127.0.0.1:5439"
+  check doctor litellm-bound-to-listen-address "$EV/doctor/listeners.txt" only_listening_on "$(host)" 4000
+  check doctor searxng-loopback-only "$EV/doctor/listeners.txt" only_listening_on 127.0.0.1 8888
+  check doctor postgres-loopback-only "$EV/doctor/listeners.txt" only_listening_on 127.0.0.1 5439
 }
 
 drive_setup() {
   local before after rc log="$EV/setup/rerun-setup.txt"
   fingerprint() {
     printf '%s\n' "$(envval LITELLM_HOST)" "$(envval LITELLM_MASTER_KEY)" "$(envval LITELLM_MAX_BUDGET)" \
-      "$(envval SEARXNG_SECRET)" "$(envval POSTGRES_PASSWORD)" | cksum
+      "$(envval SEARXNG_SECRET)" "$(envval POSTGRES_PASSWORD)" "$(envval AWS_REGION)" | cksum
   }
   before="$(fingerprint)"
   printf 'export VALIDATE_CUSTOM=kept\nexport MACHINE_MODE=full\n' >> "$REPO/.envrc.local"
@@ -225,11 +232,11 @@ drive_setup() {
 drive_connection-info() {
   local log="$EV/connection-info/show-base-url.txt"
   mk show-base-url > "$log" 2>&1
-  check connection-info show-base-url "$log" grep -qx "http://$(host):4000" "$log"
+  check connection-info show-base-url "$log" same "$(cat "$log")" "http://$(host):4000"
   mk show-key > "$REPO/.show-key" 2>&1
   redact < "$REPO/.show-key" > "$EV/connection-info/show-key.txt"
   check connection-info show-key-matches-master-key "$EV/connection-info/show-key.txt" \
-    same "$(cat "$REPO/.show-key")" "$(envval LITELLM_MASTER_KEY)"
+    nonempty_same "$(cat "$REPO/.show-key")" "$(envval LITELLM_MASTER_KEY)"
 }
 
 chat_body() { printf '{"model":"claude-sonnet-4-6-bedrock","messages":[{"role":"user","content":"ping"}],"mock_response":"pong"}'; }
@@ -253,7 +260,9 @@ drive_gateway-api() {
     check gateway-api "lists-$m" "$EV/gateway-api/models.txt" json_is "'$m' in [x['id'] for x in d['data']]" True
   done
   # LiteLLM honors a client's mock_response only for keys whose metadata allows it.
-  http mock-key POST /key/generate "$master" '{"key_alias":"validate-mock","metadata":{"allow_client_mock_response":true}}'
+  # Aliases must be unique, so each drive mints a fresh one.
+  http mock-key POST /key/generate "$master" \
+    "{\"key_alias\":\"validate-mock-$(date +%s)\",\"metadata\":{\"allow_client_mock_response\":true}}"
   mock="$(py -c 'import json,sys; print(json.load(open(sys.argv[1]))["key"])' "$HTTP_BODY" 2>/dev/null)"
   remember_key "$mock" "$EV/gateway-api/mock-key.txt"
   check gateway-api mock-key-minted "$EV/gateway-api/mock-key.txt" test -n "$mock"
@@ -267,9 +276,10 @@ drive_gateway-api() {
 agent_key() { cat "$REPO/.validate-agent-key" 2>/dev/null; }
 
 drive_agent-keys() {
-  local out rc key master
+  local out rc key master alias
   master="$(envval LITELLM_MASTER_KEY)"
-  out="$(mk new-key NAME=validate-agent BUDGET=1 2>&1)"; rc=$?
+  alias="validate-agent-$(date +%s)"
+  out="$(mk new-key NAME="$alias" BUDGET=1 2>&1)"; rc=$?
   key="$(printf '%s\n' "$out" | grep -E '^sk-' | tail -1)"
   if [[ -n "$key" ]]; then
     printf '%s\n' "$key" >> "$REPO/.validate-keys"
@@ -279,10 +289,11 @@ drive_agent-keys() {
   check agent-keys new-key-prints-key "$EV/agent-keys/new-key.txt" test "$rc" -eq 0 -a -n "$key"
   mk new-key > "$EV/agent-keys/new-key-without-name.txt" 2>&1; rc=$?
   check agent-keys new-key-requires-name "$EV/agent-keys/new-key-without-name.txt" \
-    test "$rc" -ne 0
+    failed_with_hint "$rc" "$EV/agent-keys/new-key-without-name.txt" "usage: make new-key"
   http key-info GET "/key/info?key=$key" "$master"
-  check agent-keys key-has-alias "$EV/agent-keys/key-info.txt" json_is 'd["info"]["key_alias"]' validate-agent
+  check agent-keys key-has-alias "$EV/agent-keys/key-info.txt" json_is 'd["info"]["key_alias"]' "$alias"
   check agent-keys key-has-budget "$EV/agent-keys/key-info.txt" json_is 'd["info"]["max_budget"]' 1.0
+  check agent-keys key-has-30d-budget-duration "$EV/agent-keys/key-info.txt" json_is 'd["info"]["budget_duration"]' 30d
   http models-with-agent-key GET /v1/models "$key"
   check agent-keys agent-key-authenticates "$EV/agent-keys/models-with-agent-key.txt" status_is 200
   http models-with-unknown-key GET /v1/models "sk-validate-unknown"
@@ -297,11 +308,16 @@ drive_web-search() {
 }
 
 drive_services() {
-  local rc
-  if not same "$(host)" 127.0.0.1; then
-    same "$(curl -s -o /dev/null -w '%{http_code}' --max-time 3 http://127.0.0.1:4000/health/liveliness)" 000
-    check services loopback-not-listening "$EV/doctor/listeners.txt" same "$?" 0
-  fi
+  local rc log="$EV/services/loopback.txt"
+  # 127.0.0.1 is the listen address itself, and 0.0.0.0 includes it.
+  case "$(host)" in
+    127.0.0.1|0.0.0.0) ;;
+    *)
+      printf 'GET http://127.0.0.1:4000/health/liveliness\n\nHTTP %s\n' \
+        "$(curl -s -o /dev/null -w '%{http_code}' --max-time 3 http://127.0.0.1:4000/health/liveliness)" > "$log"
+      check services loopback-not-listening "$log" grep -qx 'HTTP 000' "$log"
+      ;;
+  esac
   mk stop > "$EV/services/stop.txt" 2>&1; rc=$?
   check services stop-exits-0 "$EV/services/stop.txt" same "$rc" 0
   check services ports-freed-after-stop "$EV/services/stop.txt" wait_ports_free 60
@@ -317,14 +333,18 @@ drive_secret-hygiene() {
   for path in .envrc.local litellm/config.yaml searxng/settings.yml data/postgres/PG_VERSION logs/process-compose.log; do
     check secret-hygiene "gitignored-$path" "$SRC/.gitignore" git -C "$SRC" check-ignore -q "$path"
   done
-  local excludes=(-- . ':!requirements.txt' ':!devbox.lock')
-  git -C "$SRC" grep --untracked -nIE "$SECRET_PATTERN" "${excludes[@]}" > "$hits/worktree-hits.txt"
-  check secret-hygiene no-secret-patterns-in-worktree "$hits/worktree-hits.txt" empty "$hits/worktree-hits.txt"
+  local excludes=(-- . ':!requirements.txt' ':!devbox.lock') rc
+  git -C "$SRC" grep --untracked -nIE "$SECRET_PATTERN" "${excludes[@]}" > "$hits/worktree-hits.txt"; rc=$?
+  check secret-hygiene no-secret-patterns-in-worktree "$hits/worktree-hits.txt" no_match "$rc" "$hits/worktree-hits.txt"
   git -C "$SRC" log --all -p "${excludes[@]}" | grep -nE "$SECRET_PATTERN" > "$hits/history-hits.txt"
-  check secret-hygiene no-secret-patterns-in-history "$hits/history-hits.txt" empty "$hits/history-hits.txt"
+  local st=("${PIPESTATUS[@]}")
+  [[ "${st[0]}" -eq 0 ]] || st[1]=2
+  check secret-hygiene no-secret-patterns-in-history "$hits/history-hits.txt" no_match "${st[1]}" "$hits/history-hits.txt"
   local s
+  collect_logs
   : > "$hits/evidence-leaks.txt"
-  for s in "$(envval LITELLM_MASTER_KEY)" "$(envval SEARXNG_SECRET)" "$(envval POSTGRES_PASSWORD)" $(cat "$REPO/.validate-keys" 2>/dev/null); do
+  for s in "$(envval LITELLM_MASTER_KEY)" "$(envval SEARXNG_SECRET)" "$(envval POSTGRES_PASSWORD)" \
+           "$(envval AWS_BEARER_TOKEN_BEDROCK)" $(cat "$REPO/.validate-keys" 2>/dev/null); do
     [[ -n "$s" ]] && grep -rlF "$s" "$EV" >> "$hits/evidence-leaks.txt"
   done
   check secret-hygiene evidence-is-redacted "$hits/evidence-leaks.txt" empty "$hits/evidence-leaks.txt"
@@ -339,18 +359,29 @@ cmd_drive() {
   "drive_$feature"
 }
 
+# collect_logs: copies the copy's process logs into evidence, redacted.
+collect_logs() {
+  local log
+  mkdir -p "$EV/logs"
+  for log in "$REPO"/logs/*.log; do
+    [[ -f "$log" ]] && redact < "$log" > "$EV/logs/$(basename "$log")"
+  done
+}
+
 cmd_cleanup() {
   init_out "$1"
   if [[ -d "$REPO" ]]; then
     mk stop > "$EV/cleanup-stop.txt" 2>&1
     wait_ports_free 60 || printf 'validate: ports still busy after stop\n' >&2
-    local log
-    mkdir -p "$EV/logs"
-    for log in "$REPO"/logs/*.log; do
-      [[ -f "$log" ]] && redact < "$log" > "$EV/logs/$(basename "$log")"
-    done
+    collect_logs
+    # make setup runs `direnv allow` when direnv exists; drop that grant with the copy.
+    if command -v direnv >/dev/null 2>&1 && [[ -f "$REPO/.envrc" ]]; then
+      direnv deny "$REPO/.envrc" >/dev/null 2>&1
+    fi
     rm -rf "$REPO"
   fi
+  # Prisma and npm downloads, about 300 MB.
+  rm -rf "$OUT/cache"
   printf 'evidence: %s\nreport:   %s\n' "$EV" "$REPORT"
 }
 
