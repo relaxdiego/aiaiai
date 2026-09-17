@@ -6,7 +6,10 @@ set -uo pipefail
 SRC="$(cd "$(dirname "${BASH_SOURCE[0]}")" && git rev-parse --show-toplevel)"
 PORTS="4000 8888 5439"
 FEATURES="setup connection-info gateway-api agent-keys web-search services secret-hygiene"
-MODELS="claude-fable-5-1 claude-opus-5 claude-sonnet-5 claude-haiku-4-5-20251001"
+MODELS="claude-fable-5-1 claude-opus-5 claude-sonnet-5 claude-haiku-4-5-20251001 grok-4.6 gpt-5.6-sol"
+# Models whose upstream publishes no cache-write price, so Copilot bills none.
+# Their cache_creation_input_token_cost is a priced zero, not a missing price.
+ZERO_CACHE_WRITE_MODELS="grok-4.6"
 COST_FIELDS="input_cost_per_token output_cost_per_token cache_read_input_token_cost cache_creation_input_token_cost"
 # Master key (sk- + 32 hex), minted agent key (sk- + 22 base64url), Bedrock and
 # AWS keys from older history, GitHub tokens, Postgres URL passwords, the 48-hex
@@ -158,10 +161,12 @@ skipped_copilot_login() { grep -q 'Not signed in to GitHub Copilot' "$1" && not 
 # The user's ~/.config/litellm is LiteLLM's default token dir. Fail only if this run created it.
 config_dir_untouched() { grep -qx yes "$OUT/config-litellm-existed" 2>/dev/null || [[ ! -e "$HOME/.config/litellm" ]]; }
 
-# The /model/info entry for every model in MODELS carries every cost field, above zero.
+# Every model in MODELS carries every cost field in /model/info. Each is above
+# zero, except a cache-write price for a model in ZERO_CACHE_WRITE_MODELS, whose
+# upstream publishes none; there the field must be present and exactly zero.
 priced_expr() {
-  printf "all(any(x['model_name'] == m and all((x['model_info'].get(f) or 0) > 0 for f in '%s'.split()) for x in d['data']) for m in '%s'.split())" \
-    "$COST_FIELDS" "$MODELS"
+  printf "all(any(x['model_name'] == m and all(f in x['model_info'] and (x['model_info'][f] or 0) >= 0 and ((x['model_info'][f] or 0) > 0 or (f == 'cache_creation_input_token_cost' and m in '%s'.split())) for f in '%s'.split()) for x in d['data']) for m in '%s'.split())" \
+    "$ZERO_CACHE_WRITE_MODELS" "$COST_FIELDS" "$MODELS"
 }
 
 preflight() {
