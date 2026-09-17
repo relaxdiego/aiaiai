@@ -36,9 +36,9 @@ model_list:
       cache_read_input_token_cost: 1.0e-07
       cache_creation_input_token_cost: 1.25e-06
 
-  # Non-Claude models the pstack plugin routes to. Grok and Sol are priced per
-  # context tier upstream; these are the standard tiers (Grok <=200K,
-  # Sol <=272K). A request above the threshold costs more than recorded here.
+  # Non-Claude models. Grok, Sol, and Astra are priced per context tier
+  # upstream; these are the standard tiers (Grok <=200K, Sol and Astra <=272K).
+  # A request above the threshold costs more than recorded here.
   - model_name: grok-4.6
     litellm_params:
       model: github_copilot/grok-4.6
@@ -55,6 +55,15 @@ model_list:
       output_cost_per_token: 2.0e-05
       cache_read_input_token_cost: 4.0e-07
       cache_creation_input_token_cost: 5.0e-06
+
+  # OpenAI's frontier model. Also tiered; this is the standard tier (<=272K).
+  - model_name: gpt-6-astra
+    litellm_params:
+      model: github_copilot/gpt-6-astra
+      input_cost_per_token: 1.0e-05
+      output_cost_per_token: 5.0e-05
+      cache_read_input_token_cost: 1.0e-06
+      cache_creation_input_token_cost: 1.25e-05
 
 general_settings:
   master_key: os.environ/LITELLM_MASTER_KEY

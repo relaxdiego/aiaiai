@@ -1,6 +1,6 @@
 # Gateway API
 
-Coding agents call LiteLLM on port 4000. Claude Code uses the Anthropic Messages format. OpenCode and similar tools use the OpenAI Chat Completions format. Every API request needs a key. Only the health endpoints, such as `/health/liveliness`, answer without one. Every model is a GitHub Copilot model priced per token, so budgets measure Copilot spend. The registry serves Claude models plus the Grok and Sol models the pstack plugin routes to.
+Coding agents call LiteLLM on port 4000. Claude Code uses the Anthropic Messages format. OpenCode and similar tools use the OpenAI Chat Completions format. Every API request needs a key. Only the health endpoints, such as `/health/liveliness`, answer without one. Every model is a GitHub Copilot model priced per token, so budgets measure Copilot spend. The registry serves Claude models plus Grok, Sol, and Astra.
 
 ## Sub-features
 
@@ -37,5 +37,5 @@ Preconditions:
 - `mock_response` never reaches Copilot. A pass proves auth, routing, and format handling, not a Copilot account.
 - Without a Copilot token or the validator's key fixture, LiteLLM drops every model at startup. Then `lists-<model>` and `model-info-has-copilot-pricing` fail together. Read the LiteLLM log for `Error creating deployment`.
 - The model list is hardcoded in `validate.sh` as `MODELS`. Update it when the template's model list changes.
-- Grok and Sol are priced per context tier upstream. The template records the standard tiers, Grok up to 200K and Sol up to 272K. A longer request costs more than the recorded spend shows.
+- Grok, Sol, and Astra are priced per context tier upstream. The template records the standard tiers, Grok up to 200K and Sol and Astra up to 272K. A longer request costs more than the recorded spend shows.
 - LiteLLM rejects a duplicate key alias with HTTP 400. The mock key's alias carries a timestamp so the feature can be driven again on the same instance.
