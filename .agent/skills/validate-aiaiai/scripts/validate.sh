@@ -6,10 +6,10 @@ set -uo pipefail
 SRC="$(cd "$(dirname "${BASH_SOURCE[0]}")" && git rev-parse --show-toplevel)"
 PORTS="4000 8888 5439"
 FEATURES="setup connection-info gateway-api agent-keys web-search services secret-hygiene"
-MODELS="claude-fable-5-1 claude-opus-5 claude-sonnet-5 claude-haiku-4-5-20251001 grok-4.6 gpt-5.6-sol gpt-6-astra"
+MODELS="claude-fable-5-1 claude-opus-5 claude-sonnet-5 claude-haiku-4-5-20251001 grok-4.6 grok-4.7 gpt-5.6-sol gpt-6-astra"
 # Models whose upstream publishes no cache-write price, so Copilot bills none.
 # Their cache_creation_input_token_cost is a priced zero, not a missing price.
-ZERO_CACHE_WRITE_MODELS="grok-4.6"
+ZERO_CACHE_WRITE_MODELS="grok-4.6 grok-4.7"
 COST_FIELDS="input_cost_per_token output_cost_per_token cache_read_input_token_cost cache_creation_input_token_cost"
 # Master key (sk- + 32 hex), minted agent key (sk- + 22 base64url), Bedrock and
 # AWS keys from older history, GitHub tokens, Postgres URL passwords, the 48-hex
