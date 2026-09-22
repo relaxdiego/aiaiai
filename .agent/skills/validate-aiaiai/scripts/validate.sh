@@ -9,7 +9,7 @@ FEATURES="setup connection-info gateway-api agent-keys web-search services secre
 # Fable and Opus are pinned to 1M context via extra_headers, but the model_name
 # stays bare: Claude Code's "(1M context)" picker entry still sends the bare
 # name on the wire, the bracketed ID is a UI label only.
-MODELS="claude-fable-5-1 claude-opus-5 claude-sonnet-5 claude-haiku-4-5-20251001 grok-4.6 grok-4.7 gpt-5.6-sol gpt-6-astra"
+MODELS="claude-fable-5-1 claude-opus-5-5 claude-sonnet-5 claude-haiku-4-5-20251001 grok-4.6 grok-4.7 gpt-5.6-sol gpt-6-astra"
 # Models whose upstream publishes no cache-write price, so Copilot bills none.
 # Their cache_creation_input_token_cost is a priced zero, not a missing price.
 ZERO_CACHE_WRITE_MODELS="grok-4.6 grok-4.7"
