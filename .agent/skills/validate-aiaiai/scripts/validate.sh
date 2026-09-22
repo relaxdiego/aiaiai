@@ -6,7 +6,9 @@ set -uo pipefail
 SRC="$(cd "$(dirname "${BASH_SOURCE[0]}")" && git rev-parse --show-toplevel)"
 PORTS="4000 8888 5439"
 FEATURES="setup connection-info gateway-api agent-keys web-search services secret-hygiene"
-MODELS="claude-fable-5-1 claude-opus-5 claude-sonnet-5 claude-haiku-4-5-20251001 grok-4.6 grok-4.7 gpt-5.6-sol gpt-6-astra"
+# Fable and Opus carry a bracketed 1M-context ID. [1m] is a glob character
+# class, so each unquoted expansion of MODELS is wrapped in noglob (below).
+MODELS="claude-fable-5-1[1m] claude-opus-5[1m] claude-sonnet-5 claude-haiku-4-5-20251001 grok-4.6 grok-4.7 gpt-5.6-sol gpt-6-astra"
 # Models whose upstream publishes no cache-write price, so Copilot bills none.
 # Their cache_creation_input_token_cost is a priced zero, not a missing price.
 ZERO_CACHE_WRITE_MODELS="grok-4.6 grok-4.7"
@@ -281,9 +283,11 @@ drive_gateway-api() {
   check gateway-api rejects-missing-key "$EV/gateway-api/models-without-key.txt" status_is 401
   http models GET /v1/models "$master"
   check gateway-api lists-models-200 "$EV/gateway-api/models.txt" status_is 200
+  set -f  # $MODELS holds bracketed IDs; do not let the shell glob them
   for m in $MODELS; do
     check gateway-api "lists-$m" "$EV/gateway-api/models.txt" json_is "'$m' in [x['id'] for x in d['data']]" True
   done
+  set +f
   http model-info GET /model/info "$master"
   check gateway-api model-info-has-copilot-pricing "$EV/gateway-api/model-info.txt" json_is "$(priced_expr)" True
   # LiteLLM honors a client's mock_response only for keys whose metadata allows it.
