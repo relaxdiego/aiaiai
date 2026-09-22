@@ -76,8 +76,8 @@ The gateway serves eight models. Each name is the model ID an agent asks for, ma
 
 | Model | Copilot model |
 |---|---|
-| `claude-fable-5-1[1m]` | `claude-fable-5.1` |
-| `claude-opus-5[1m]` | `claude-opus-5` |
+| `claude-fable-5-1` | `claude-fable-5.1` |
+| `claude-opus-5` | `claude-opus-5` |
 | `claude-sonnet-5` | `claude-sonnet-5` |
 | `claude-haiku-4-5-20251001` | `claude-haiku-4.5` |
 | `grok-4.6` | `grok-4.6` |

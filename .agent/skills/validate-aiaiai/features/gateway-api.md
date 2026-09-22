@@ -1,6 +1,6 @@
 # Gateway API
 
-Coding agents call LiteLLM on port 4000. Claude Code uses the Anthropic Messages format. OpenCode and similar tools use the OpenAI Chat Completions format. Every API request needs a key. Only the health endpoints, such as `/health/liveliness`, answer without one. Every model is a GitHub Copilot model priced per token, so budgets measure Copilot spend. The registry serves Claude models plus Grok, Sol, and Astra. Fable and Opus are served only as their 1M-context variety, under the bracketed ID Claude Code asks for; the registry pins the beta that unlocks the window with `extra_headers`.
+Coding agents call LiteLLM on port 4000. Claude Code uses the Anthropic Messages format. OpenCode and similar tools use the OpenAI Chat Completions format. Every API request needs a key. Only the health endpoints, such as `/health/liveliness`, answer without one. Every model is a GitHub Copilot model priced per token, so budgets measure Copilot spend. The registry serves Claude models plus Grok, Sol, and Astra. Fable and Opus are served only as their 1M-context variety. The registry pins the beta that unlocks the window with `extra_headers`, keyed on the bare model name: Claude Code's "(1M context)" picker entry still sends the bare name on the wire, not a bracketed one.
 
 ## Sub-features
 
@@ -37,7 +37,6 @@ Preconditions:
 - `mock_response` never reaches Copilot. A pass proves auth, routing, and format handling, not a Copilot account.
 - Without a Copilot token or the validator's key fixture, LiteLLM drops every model at startup. Then `lists-<model>` and `model-info-has-copilot-pricing` fail together. Read the LiteLLM log for `Error creating deployment`.
 - The model list is hardcoded in `validate.sh` as `MODELS`. Update it when the template's model list changes.
-- `MODELS` holds bracketed IDs such as `claude-opus-5[1m]`. `[1m]` is a glob character class, so the `lists-<model>` loop runs under `set -f`. Without it the shell rewrites the name to `claude-opus-51` when a file of that name exists, and the check silently tests the wrong ID.
 - Grok, Sol, and Astra are priced per context tier upstream. The template records the standard tiers, Grok up to 200K and Sol and Astra up to 272K. A longer request costs more than the recorded spend shows.
 - Copilot's 1M context window is documented as available in VS Code and Copilot CLI only. LiteLLM sends fixed VS Code identity headers, and the registry pins `context-1m-2025-08-07`, but whether Copilot honors it for gateway traffic is unverified here: the validator has no Copilot account.
 - LiteLLM rejects a duplicate key alias with HTTP 400. The mock key's alias carries a timestamp so the feature can be driven again on the same instance.

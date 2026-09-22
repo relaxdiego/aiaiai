@@ -4,13 +4,14 @@ model_list:
   # No wildcard route: an unpriced model would bill at 0 and escape max_budget.
   # LiteLLM signs in with the tokens in GITHUB_COPILOT_TOKEN_DIR (see
   # process-compose.yaml), written by `make copilot-login`.
-  # Fable and Opus are served only as their 1M-context variety, under the
-  # bracketed ID Claude Code asks for. `extra_headers` pins the beta that
-  # unlocks the window, so the client gets 1M whether or not it sends the
-  # header itself: LiteLLM drops a client's own anthropic-beta unless
-  # forward_client_headers_to_llm_api is on, and that would also forward every
-  # x-* header and Authorization.
-  - model_name: claude-fable-5-1[1m]
+  # Fable and Opus are served only at 1M context. Claude Code's "(1M context)"
+  # picker entry still sends the bare model name on the wire (the bracketed ID
+  # is a UI label only), so the model_name here stays bare. `extra_headers`
+  # pins the beta that unlocks the window on every request to it, so the
+  # client gets 1M whether or not it sends the header itself: LiteLLM drops a
+  # client's own anthropic-beta unless forward_client_headers_to_llm_api is on,
+  # and that would also forward every x-* header and Authorization.
+  - model_name: claude-fable-5-1
     litellm_params:
       model: github_copilot/claude-fable-5.1
       extra_headers:
@@ -20,7 +21,7 @@ model_list:
       cache_read_input_token_cost: 2.5e-07
       cache_creation_input_token_cost: 1.25e-05
 
-  - model_name: claude-opus-5[1m]
+  - model_name: claude-opus-5
     litellm_params:
       model: github_copilot/claude-opus-5
       extra_headers:
