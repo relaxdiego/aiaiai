@@ -6,10 +6,10 @@ set -uo pipefail
 SRC="$(cd "$(dirname "${BASH_SOURCE[0]}")" && git rev-parse --show-toplevel)"
 PORTS="4000 8888 5439"
 FEATURES="setup connection-info gateway-api agent-keys web-search services secret-hygiene"
-# Fable and Opus are pinned to 1M context via extra_headers, but the model_name
-# stays bare: Claude Code's "(1M context)" picker entry still sends the bare
-# name on the wire, the bracketed ID is a UI label only.
-MODELS="claude-fable-5-1 claude-opus-5-5 claude-sonnet-5 claude-haiku-4-5-20251001 grok-4.6 grok-4.7 gpt-5.6-sol gpt-6-astra"
+# Fable, Opus, and Sonnet are pinned to 1M context via extra_headers, but the
+# model_name stays bare: Claude Code's "(1M context)" picker entry still sends
+# the bare name on the wire, the bracketed ID is a UI label only.
+MODELS="claude-fable-5-1 claude-opus-5-5 claude-sonnet-5-5 claude-haiku-4-5-20251001 grok-4.6 grok-4.7 gpt-5.6-sol gpt-6-astra"
 # Models whose upstream publishes no cache-write price, so Copilot bills none.
 # Their cache_creation_input_token_cost is a priced zero, not a missing price.
 ZERO_CACHE_WRITE_MODELS="grok-4.6 grok-4.7"
@@ -267,7 +267,7 @@ drive_connection-info() {
     nonempty_same "$(cat "$REPO/.show-key")" "$(envval LITELLM_MASTER_KEY)"
 }
 
-chat_body() { printf '{"model":"claude-sonnet-5","messages":[{"role":"user","content":"ping"}],"mock_response":"pong"}'; }
+chat_body() { printf '{"model":"claude-sonnet-5-5","messages":[{"role":"user","content":"ping"}],"mock_response":"pong"}'; }
 
 # remember_key KEY EVIDENCE: adds KEY to the redaction list, then re-redacts the
 # evidence file that was written before the key was known.
@@ -299,7 +299,7 @@ drive_gateway-api() {
   http openai-chat POST /v1/chat/completions "$mock" "$(chat_body)"
   check gateway-api openai-chat-completions "$EV/gateway-api/openai-chat.txt" json_is 'd["choices"][0]["message"]["content"]' pong
   http anthropic-messages POST /v1/messages "$mock" \
-    '{"model":"claude-sonnet-5","max_tokens":16,"messages":[{"role":"user","content":"ping"}],"mock_response":"pong"}'
+    '{"model":"claude-sonnet-5-5","max_tokens":16,"messages":[{"role":"user","content":"ping"}],"mock_response":"pong"}'
   check gateway-api anthropic-messages "$EV/gateway-api/anthropic-messages.txt" json_is 'd["content"][0]["text"]' pong
 }
 
@@ -337,7 +337,7 @@ drive_web-search() {
   # Claude Code's standalone web_search request. A 200 proves LiteLLM answered it
   # from SearXNG: the fixture's dead Copilot API base fails any upstream call.
   http interception POST /v1/messages "$(agent_key)" \
-    '{"model":"claude-sonnet-5","max_tokens":256,"tools":[{"type":"web_search_20250305","name":"web_search","max_uses":1}],"messages":[{"role":"user","content":"Linux kernel"}]}'
+    '{"model":"claude-sonnet-5-5","max_tokens":256,"tools":[{"type":"web_search_20250305","name":"web_search","max_uses":1}],"messages":[{"role":"user","content":"Linux kernel"}]}'
   check web-search interception-200 "$EV/web-search/interception.txt" status_is 200
   check web-search websearch-interception "$EV/web-search/interception.txt" \
     json_is "d['content'][0]['type'] == 'text' and 'URL: http' in d['content'][0]['text'] and d['usage']['output_tokens'] == 0" True

@@ -20,7 +20,7 @@ Preconditions:
 - The machine can reach the public internet.
 
 - **Search endpoint.** `validate.sh drive "$OUT" web-search` sends `{"query":"Linux kernel","max_results":3}` with the agent key. Checks `search-endpoint-200` and `search-returns-results` pass on HTTP 200 with a non-empty `results` list. LiteLLM ignores `max_results` for SearXNG, so expect every result SearXNG returns (30 in a recent run), not 3.
-- **Interception.** It sends `POST /v1/messages` for `claude-sonnet-5` with the agent key, only the `web_search_20250305` tool, and the user message `Linux kernel`. That is the shape of Claude Code's search sub-request. Check `interception-200` passes on HTTP 200. Check `websearch-interception` passes when the first `content` block is `text` holding SearXNG results as `Title:`, `URL:`, and `Snippet:` lines, and `usage.output_tokens` is 0. The validator's Copilot API base is dead, so a 200 means LiteLLM never called Copilot.
+- **Interception.** It sends `POST /v1/messages` for `claude-sonnet-5-5` with the agent key, only the `web_search_20250305` tool, and the user message `Linux kernel`. That is the shape of Claude Code's search sub-request. Check `interception-200` passes on HTTP 200. Check `websearch-interception` passes when the first `content` block is `text` holding SearXNG results as `Title:`, `URL:`, and `Snippet:` lines, and `usage.output_tokens` is 0. The validator's Copilot API base is dead, so a 200 means LiteLLM never called Copilot.
 - **No device flow.** Check `no-device-flow-in-server-log` passes when the LiteLLM log has no `Please visit` line.
 - **Proof.** `evidence/web-search/search.txt`, `interception.txt`, and `evidence/logs/process-compose.log`.
 

@@ -1,6 +1,6 @@
 # Gateway API
 
-Coding agents call LiteLLM on port 4000. Claude Code uses the Anthropic Messages format. OpenCode and similar tools use the OpenAI Chat Completions format. Every API request needs a key. Only the health endpoints, such as `/health/liveliness`, answer without one. Every model is a GitHub Copilot model priced per token, so budgets measure Copilot spend. The registry serves Claude models plus Grok, Sol, and Astra. Fable and Opus are served only as their 1M-context variety. The registry pins the beta that unlocks the window with `extra_headers`, keyed on the bare model name: Claude Code's "(1M context)" picker entry still sends the bare name on the wire, not a bracketed one.
+Coding agents call LiteLLM on port 4000. Claude Code uses the Anthropic Messages format. OpenCode and similar tools use the OpenAI Chat Completions format. Every API request needs a key. Only the health endpoints, such as `/health/liveliness`, answer without one. Every model is a GitHub Copilot model priced per token, so budgets measure Copilot spend. The registry serves Claude models plus Grok, Sol, and Astra. Fable, Opus, and Sonnet are served only as their 1M-context variety. The registry pins the beta that unlocks the window with `extra_headers`, keyed on the bare model name: Claude Code's "(1M context)" picker entry still sends the bare name on the wire, not a bracketed one.
 
 ## Sub-features
 
@@ -27,7 +27,7 @@ Preconditions:
 - **Models.** It sends `GET /v1/models` with the master key. Checks `lists-models-200` and `lists-<model>` for each name in `MODELS` pass.
 - **Pricing.** It sends `GET /model/info` with the master key. Check `model-info-has-copilot-pricing` passes when every model in `MODELS` carries `input_cost_per_token`, `output_cost_per_token`, `cache_read_input_token_cost`, and `cache_creation_input_token_cost` above zero. A model listed in `ZERO_CACHE_WRITE_MODELS` is the one exception: its cache-write price must be present and exactly zero, because its upstream publishes none.
 - **Mock key.** It mints `validate-mock-<epoch>` through `POST /key/generate` with metadata `allow_client_mock_response: true`. Check `mock-key-minted` passes when the response has a key.
-- **OpenAI format.** It sends `POST /v1/chat/completions` for `claude-sonnet-5` with `"mock_response": "pong"` and the mock key. Check `openai-chat-completions` passes when `choices[0].message.content` is `pong`.
+- **OpenAI format.** It sends `POST /v1/chat/completions` for `claude-sonnet-5-5` with `"mock_response": "pong"` and the mock key. Check `openai-chat-completions` passes when `choices[0].message.content` is `pong`.
 - **Anthropic format.** It sends `POST /v1/messages` with the same mock and key. Check `anthropic-messages` passes when `content[0].text` is `pong`.
 - **Proof.** `evidence/gateway-api/*.txt` hold each request and response.
 
