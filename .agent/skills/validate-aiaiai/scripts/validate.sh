@@ -162,6 +162,18 @@ nonempty_same() { [[ -n "$1" ]] && same "$1" "$2"; }
 no_match() { [[ "$1" -eq 1 ]] && empty "$2"; }
 skipped_copilot_login() { grep -q 'Not signed in to GitHub Copilot' "$1" && not grep -q 'Please visit' "$1"; }
 # The user's ~/.config/litellm is LiteLLM's default token dir. Fail only if this run created it.
+# The pinned certifi bundle cannot receive CA distrusts, so LiteLLM must run on
+# a system bundle outside the venv.
+litellm_env() {
+  local pid
+  pid="$(pgrep -f "$REPO/.venv/bin/.*litellm --config" | head -1)"
+  [[ -n "$pid" ]] && ps eww -o command= -p "$pid" | tr ' ' '\n'
+}
+uses_system_ca_bundle() {
+  local f
+  f="$(cut -d= -f2- "$1")"
+  [[ -f "$f" ]] && [[ "$f" != "$REPO"/* ]]
+}
 config_dir_untouched() { grep -qx yes "$OUT/config-litellm-existed" 2>/dev/null || [[ ! -e "$HOME/.config/litellm" ]]; }
 
 # Every model in MODELS carries every cost field in /model/info. Each is above
@@ -237,6 +249,8 @@ cmd_doctor() {
   check doctor litellm-bound-to-listen-address "$EV/doctor/listeners.txt" only_listening_on "$(host)" 4000
   check doctor searxng-loopback-only "$EV/doctor/listeners.txt" only_listening_on 127.0.0.1 8888
   check doctor postgres-loopback-only "$EV/doctor/listeners.txt" only_listening_on 127.0.0.1 5439
+  litellm_env | grep -E '^SSL_CERT_FILE=' > "$EV/doctor/ssl-cert-file.txt"
+  check doctor litellm-uses-system-ca-bundle "$EV/doctor/ssl-cert-file.txt" uses_system_ca_bundle "$EV/doctor/ssl-cert-file.txt"
 }
 
 drive_setup() {

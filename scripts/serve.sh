@@ -27,6 +27,16 @@ eval "$(devbox shellenv)"
 # LiteLLM shells out to the prisma CLI installed next to it.
 export PATH="$PWD/.venv/bin:$PATH"
 
+# LiteLLM and SearXNG otherwise trust the certifi bundle frozen into the
+# lockfile, which cannot receive CA distrusts such as the 2026 eMudhra one.
+# The OS store gets them with system updates.
+if [[ -z "${SSL_CERT_FILE:-}" ]]; then
+  for bundle in /etc/ssl/certs/ca-certificates.crt /etc/pki/tls/certs/ca-bundle.crt /etc/ssl/cert.pem; do
+    if [[ -f "$bundle" ]]; then export SSL_CERT_FILE="$bundle"; break; fi
+  done
+fi
+[[ -n "${SSL_CERT_FILE:-}" ]] || fail "No system CA bundle found. Set SSL_CERT_FILE in .envrc.local."
+
 mkdir -p logs
 exec process-compose up --config process-compose.yaml --use-uds \
   --log-file logs/process-compose-server.log "$@"

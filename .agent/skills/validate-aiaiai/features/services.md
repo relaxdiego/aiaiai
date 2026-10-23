@@ -8,6 +8,7 @@
 - `svc-binding` binds LiteLLM to the listen address and the other two to `127.0.0.1`.
 - `svc-stop` stops everything and frees the ports.
 - `svc-restart` starts again and keeps data, like minted keys.
+- `svc-ca-bundle` runs LiteLLM and SearXNG on the system CA bundle, not the pinned certifi one.
 
 ## How to get to it (user POV)
 
@@ -19,7 +20,7 @@ Preconditions:
 
 - `agent-keys` passed, so a minted key exists.
 
-- **Status and binding.** `validate.sh doctor "$OUT"` covers `postgres-running`, `searxng-running`, `litellm-running`, `liveliness-200`, `db-connected`, `litellm-bound-to-listen-address`, `searxng-loopback-only`, and `postgres-loopback-only`. Each binding check passes only when that address is the sole listener on its port, so an extra `0.0.0.0` or IPv6 listener fails it.
+- **Status and binding.** `validate.sh doctor "$OUT"` covers `postgres-running`, `searxng-running`, `litellm-running`, `liveliness-200`, `db-connected`, `litellm-bound-to-listen-address`, `searxng-loopback-only`, `postgres-loopback-only`, and `litellm-uses-system-ca-bundle`. Each binding check passes only when that address is the sole listener on its port, so an extra `0.0.0.0` or IPv6 listener fails it. The CA check reads `SSL_CERT_FILE` from the running LiteLLM process into `evidence/doctor/ssl-cert-file.txt` and passes when it names an existing file outside the repo.
 - **Loopback closed.** `validate.sh drive "$OUT" services` connects to `127.0.0.1:4000` when the listen address is neither `127.0.0.1` nor `0.0.0.0`. Check `loopback-not-listening` passes when the connection fails with HTTP 000, recorded in `evidence/services/loopback.txt`.
 - **Stop.** It runs `make stop`. Checks `stop-exits-0` and `ports-freed-after-stop` pass.
 - **Restart.** It runs `make start`. Checks `restart-exits-0` and `ready-after-restart` pass.
