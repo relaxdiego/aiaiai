@@ -51,7 +51,7 @@ Run the `validate-aiaiai` skill after any change to the files above. It is the d
 
 **Fixed ports.** 4000, 8888, 5439, and socket `/tmp/aiaiai-<uid>.sock`. One instance per machine. The validator refuses to run when they are busy.
 
-**System CA bundle.** The lockfile freezes `certifi`, so a CA distrust (eMudhra, October 2026) never reaches it. `scripts/serve.sh` sets `SSL_CERT_FILE` to the OS bundle, which LiteLLM (`get_ssl_configuration` in `litellm/llms/custom_httpx/http_handler.py`) and SearXNG's httpx client both honor. OS updates then carry distrusts. A preset `SSL_CERT_FILE` wins.
+**System CA bundle.** The lockfile freezes `certifi`, so a CA distrust (eMudhra, October 2026) never reaches it. `scripts/serve.sh` sets `SSL_CERT_FILE` to the distro bundle on Linux and Homebrew's `ca-certificates` bundle on macOS, whose `/etc/ssl/cert.pem` never receives distrusts, which LiteLLM (`get_ssl_configuration` in `litellm/llms/custom_httpx/http_handler.py`) and SearXNG's httpx client both honor. OS updates then carry distrusts. A preset `SSL_CERT_FILE` wins.
 
 ## Invariants to maintain
 
