@@ -72,17 +72,16 @@ Logs go to `logs/process-compose.log` and rotate at 10 MB.
 
 ## Models and spend
 
-The gateway serves eight models. Each name is the model ID an agent asks for, mapped to the matching Copilot model:
+The gateway serves seven models. Each name is the model ID an agent asks for, mapped to the matching Copilot model:
 
 | Model | Copilot model |
 |---|---|
-| `claude-fable-5-1` | `claude-fable-5.1` |
+| `claude-fable-5-2` | `claude-fable-5.2` |
 | `claude-opus-5-5` | `claude-opus-5.5` |
 | `claude-sonnet-5-5` | `claude-sonnet-5.5` |
-| `claude-haiku-4-5-20251001` | `claude-haiku-4.5` |
-| `grok-4.6` | `grok-4.6` |
+| `claude-haiku-5-5` | `claude-haiku-5.5` |
 | `grok-4.7` | `grok-4.7` |
-| `gpt-5.6-sol` | `gpt-5.6-sol` |
+| `gpt-6.1-sol` | `gpt-6.1-sol` |
 | `gpt-6-astra` | `gpt-6-astra` |
 
 Each model carries GitHub's [published per-token price](https://docs.github.com/en/copilot/reference/copilot-billing/models-and-pricing). The budget from `make setup` and each key's `BUDGET` therefore measure Copilot spend in US dollars. To add a model, add an entry with its prices to `litellm/config.yaml.example` and re-run `make setup`.
