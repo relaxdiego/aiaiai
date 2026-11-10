@@ -5,7 +5,8 @@
     "uv@latest",
     "searxng@latest",
     "process-compose@latest",
-    "postgresql@17"
+    "postgresql@17",
+    "nodejs@22"
   ],
   "shell": {
     "init_hook": []

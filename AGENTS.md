@@ -19,7 +19,7 @@ This repo runs the model backend for coding agents on a workstation (Linux or ma
 | `data/github_copilot/` | Git-ignored, mode 700. The GitHub access token and the short-lived Copilot key |
 | `.envrc.local.example` | Every variable `.envrc.local` holds, with placeholders |
 | `.envrc` | Optional direnv hook: devbox shellenv plus `.envrc.local` |
-| `devbox.json` | python, uv, searxng, process-compose, postgresql |
+| `devbox.json` | python, uv, searxng, process-compose, postgresql, nodejs (Prisma's CLI uses it instead of downloading Node through nodeenv) |
 | `requirements.in` / `requirements.txt` | LiteLLM and Prisma pins / hash-locked lockfile from `uv pip compile --generate-hashes --exclude-newer` |
 | `.agent/skills/validate-aiaiai/` | Validation skill, helper script, and feature map. `.claude/skills` and `.pi/skills` symlink here |
 
